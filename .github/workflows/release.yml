@@ -1,25 +1,37 @@
-name: Prepare signed release
+name: Prepare GitHub release
 on:
   workflow_dispatch:
     inputs:
       signed:
-        description: Require a valid signing certificate
+        description: Require valid signing certificates
+        type: boolean
+        default: true
+      create_draft:
+        description: Upload validated packages to a draft GitHub Release
         type: boolean
         default: true
 permissions:
   contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
-  release:
+  build:
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
             platform: win
+            arch: x64
           - os: macos-latest
             platform: mac
+            arch: arm64
+          - os: macos-latest
+            platform: mac
+            arch: x64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
         with:
@@ -31,7 +43,7 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run test:desktop
-      - name: Build installers and checksums
+      - name: Build packages and platform manifest
         shell: bash
         env:
           CSC_LINK: ${{ matrix.platform == 'mac' && secrets.MAC_CSC_LINK || '' }}
@@ -41,16 +53,56 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          RELEASE_BASE_URL: ${{ vars.RELEASE_BASE_URL }}
           REQUIRE_SIGNED: ${{ inputs.signed }}
-        run: node scripts/build-release.mjs ${{ matrix.platform }}
+        run: node scripts/build-release.mjs ${{ matrix.platform }} --arch ${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.platform }}-${{ runner.arch }}
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             release/*.exe
             release/*.zip
-            release/*.blockmap
             release/release-*.json
             release/SHA256SUMS-*.txt
+          if-no-files-found: error
           retention-days: 30
+  assemble:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+      - name: Merge and verify complete release metadata
+        run: node scripts/merge-release.mjs release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-complete
+          path: release/**
+          if-no-files-found: error
+          retention-days: 30
+      - name: Create reviewable draft release
+        if: inputs.create_draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version=$(node -p "JSON.parse(require('fs').readFileSync('package.json')).version")
+          tag="v${version}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+            [ "$draft" = "true" ] || { echo "Refusing to replace a published release"; exit 1; }
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --title "$tag" --notes-file release/release-notes.md
+          fi
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" release/*.exe release/*.zip release/release.json release/SHA256SUMS.txt --clobber
