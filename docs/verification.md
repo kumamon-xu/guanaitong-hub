@@ -14,7 +14,11 @@
 | 安装包入口检查 | Windows 包内入口通过 | 与原生桌面检查相同的测试流程 |
 | Windows/macOS GitHub Actions | 两平台完整检查通过 | 代码检查、114 项测试、模拟登录、原生桌面、目录打包及产物上传 |
 
-公开仓库首次完整工作流已通过：[Desktop checks](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37738342471)。原生检查在 GitHub 托管的 Windows/macOS 运行器执行。README 徽标反映最新工作流状态。
+v0.6.1 最新完整工作流已通过：[Desktop checks](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37742809270)。原生检查在 GitHub 托管的 Windows/macOS 运行器执行。README 徽标反映最新工作流状态。
+
+三平台草稿构建与清单组装也已通过：[Prepare GitHub release](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37742811978)。Windows x64、macOS arm64/x64 的实际产物大小与 SHA-256 经过组装阶段和 GitHub 资产 digest 复核。v0.6.1 保持数据库 v3，不增加结构迁移。
+
+本轮草稿为未签名测试产物，尚未正式发布；正式更新源会忽略草稿。CI 验证修正了 Windows 短路径、macOS 规范路径的断言差异，以及空签名 Secrets 被错误当作证书路径的问题。
 
 新增更新回归包括：默认 GitHub 来源、无正式版本、标签/清单/资产不一致、下载损坏与取消、安装前篡改、备份失败、重定向限制、过旧数据结构及并发检查。原生 IPC 验证使用合成安装包，校验、备份和交接失败路径均通过，未执行真实安装程序。
 
