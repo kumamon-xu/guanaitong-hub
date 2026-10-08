@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { app, dialog, safeStorage,shell } from 'electron';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync,writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync,writeFileSync,realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { HubStore } from '../electron/store';
 import { SessionVault } from '../electron/session-vault';
@@ -177,7 +177,7 @@ app.on('browser-window-created', (_event, window) => {
           assert.deepEqual(readFileSync(prepared.filePath),updateBytes);assert.ok(existsSync(prepared.backupPath));
           const opened:string[]=[];shell.openPath=async path=>{opened.push(path);return'synthetic-stop-before-launch';};
           await assert.rejects(window.webContents.executeJavaScript('window.hub.installUpdate()'),/未能启动/);
-          assert.deepEqual(opened,[prepared.filePath]);
+          assert.deepEqual(opened,[realpathSync(prepared.filePath)]);
           assert.equal((await window.webContents.executeJavaScript('window.hub.getState()')).cards.length,1);
         }
         await screenshot('settings.png');
