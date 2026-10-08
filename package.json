@@ -1,0 +1,94 @@
+{
+  "name": "guanaitong-hub",
+  "version": "0.6.0",
+  "description": "关爱通卡片与兑换管理，本地桌面应用",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/build-electron.mjs",
+    "start": "npm run build && electron .",
+    "test": "tsx --test tests/*.test.ts",
+    "test:login-browser": "node scripts/check-hidden-login.mjs",
+    "test:desktop": "npm run build && node scripts/check-desktop.mjs",
+    "package": "npm run build && electron-builder --dir --publish never",
+    "package:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "package:mac": "npm run build && electron-builder --mac dir --publish never",
+    "lint": "eslint .",
+    "check": "npm run lint && tsc --noEmit && npm test",
+    "release:win": "node scripts/build-release.mjs win",
+    "release:mac": "node scripts/build-release.mjs mac",
+    "audit:public": "node scripts/audit-public.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^10.12.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^7.2.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "build": {
+    "appId": "com.local.guanaitonghub",
+    "productName": "关爱通卡管家",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json",
+      "!**/._*",
+      "!**/.DS_Store"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "executableName": "guanaitong-hub",
+      "icon": "assets/icon.png",
+      "artifactName": "guanaitong-hub-${version}-${arch}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "category": "public.app-category.shopping",
+      "target": "dir",
+      "icon": "assets/icon.icns"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kumamon-xu/guanaitong-hub.git"
+  },
+  "homepage": "https://github.com/kumamon-xu/guanaitong-hub",
+  "bugs": {
+    "url": "https://github.com/kumamon-xu/guanaitong-hub/issues"
+  }
+}
