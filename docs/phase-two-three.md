@@ -65,7 +65,7 @@ release.yml 通过 workflow_dispatch 手动运行，默认 signed=true、create_
 
 没有配置签名证书时，可设置 signed=false 验证草稿流程；这不会取得发布者签名或公证。工作流拒绝覆盖已有正式版本。
 
-v0.6.1 的三平台草稿流程已完成[在线验证](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37742811978)。未签名模式会忽略签名环境变量，空 Secrets 不会被误当成证书路径。草稿中已包含三类安装包、统一清单和校验文件，正式发布仍由维护者审查后执行。
+v0.6.1 的三平台构建与组装已完成[在线验证](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37742811978)，并于 2026-10-08 转为[正式发布](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.6.1)。发布包含三类安装包、统一清单和校验文件，默认更新通道已可读取。此版本使用未签名模式，macOS 未公证；未签名模式会忽略签名环境变量，空 Secrets 不会被误当成证书路径。
 
 ci.yml 继续执行 Windows/macOS 的代码、模拟登录、原生加密与目录打包检查。工作流中的 build 任务仅有读取权限，草稿组装任务单独使用 contents:write。
 
