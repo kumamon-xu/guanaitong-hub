@@ -92,7 +92,7 @@ git add <reviewed-files>
 npm run audit:public         # 审查 Git 暂存区是否适合公开
 ```
 
-常规测试不会访问个人应用数据或登录真实账号。当前验证范围、跨平台限制和检查方法见[验证说明](docs/verification.md)。Windows/macOS 自动检查与手动签名构建配置位于 `.github/workflows/`。
+常规测试不会访问个人应用数据或登录真实账号。114 项测试及 Windows/macOS 首次在线检查已通过；范围、限制和检查方法见[验证说明](docs/verification.md)。自动检查与手动签名构建配置位于 `.github/workflows/`。
 
 ```text
 src/          React 页面、共享类型、筛选与预算规则

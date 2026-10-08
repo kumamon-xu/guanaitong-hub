@@ -12,9 +12,9 @@
 | `npm run test:login-browser` | 三组合成回归通过 | 隐藏成功、提交就绪等待、失败后手动接续 |
 | `npm run test:desktop` | Windows 原生检查通过 | IPC、系统加密、SQLite、恢复预览及跨进程读取 |
 | 安装包入口检查 | Windows 包内入口通过 | 与原生桌面检查相同的测试流程 |
-| macOS | 工作流已配置 | 当前版本仍需对应环境执行在线/实机验收 |
+| Windows/macOS GitHub Actions | 两平台完整检查通过 | 代码检查、114 项测试、模拟登录、原生桌面、目录打包及产物上传 |
 
-GitHub Actions 徽标反映仓库最新工作流状态，不将本地验证等同于跨平台 CI 已通过。
+公开仓库首次完整工作流已通过：[Desktop checks](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37738342471)。原生检查在 GitHub 托管的 Windows/macOS 运行器执行。README 徽标反映最新工作流状态。
 
 ## 数据可靠性
 
@@ -53,4 +53,4 @@ npm run audit:public
 git diff --cached --check
 ```
 
-签名、公证、真实发布清单托管及 macOS 原生运行需要对应凭据和设备。没有这些条件时，只报告本地实际通过的检查。
+签名、公证、真实发布清单托管及用户设备安装仍需要对应凭据和设备。CI 原生检查不等同于签名安装包已经完成正式发行。

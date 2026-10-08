@@ -79,7 +79,7 @@ node scripts/build-release.mjs win --signed
 - 仓库变量：`RELEASE_BASE_URL`。
 - 仓库 Secrets：`WIN_CSC_*`、`MAC_CSC_*` 及所需 `APPLE_*`。
 
-在线 CI 的状态以 Actions 实际结果为准。macOS 原生运行、真实证书签名、公证和正式发布源需要对应环境验收。
+Windows/macOS 的原生检查与目录打包已通过首次[公开 Actions 验证](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37738342471)。后续状态以 Actions 实际结果为准；真实证书签名、公证、用户设备安装和正式发布源仍需对应环境验收。
 
 ## 公开仓库规则
 
