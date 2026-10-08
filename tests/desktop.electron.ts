@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { app, dialog, safeStorage } from 'electron';
+import { app, dialog, safeStorage,shell } from 'electron';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync,writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { HubStore } from '../electron/store';
@@ -9,6 +10,7 @@ import { AddressVault } from '../electron/addresses';
 import { version } from '../package.json';
 import { DEFAULT_PRODUCT_QUERY,DEFAULT_ORDER_QUERY,type SyncTask } from '../src/shared/operations';
 import { BackupService } from '../electron/backup-service';
+import { DEFAULT_UPDATE_FEED,RELEASE_REPOSITORY } from '../src/shared/release-config';
 
 const root = process.env.HUB_DESKTOP_TEST_ROOT!;
 const phase = process.env.HUB_DESKTOP_TEST_PHASE!;
@@ -20,6 +22,18 @@ mkdirSync(appData, { recursive: true });
 // The production entry uses appData to locate its vault; keep real user data untouched.
 app.setPath('appData', appData);
 dialog.showErrorBox = (title, message) => { console.error(title, message); app.exit(1); };
+const updateBytes=Buffer.from('synthetic package; never execute'),updateHash=createHash('sha256').update(updateBytes).digest('hex');
+const updateBase=`https://github.com/${RELEASE_REPOSITORY}/releases/download/v0.6.2/`;
+const updateName=`guanaitong-hub-0.6.2-${process.arch}.${process.platform==='win32'?'exe':'zip'}`;
+const updateManifest={format:'guanaitong-release',schemaVersion:1,version:'0.6.2',notes:'合成更新说明',publishedAt:'2026-10-08T00:00:00.000Z',databaseVersion:3,downloads:{[process.platform+'-'+process.arch]:{url:updateBase+updateName,sha256:updateHash,size:updateBytes.length}}};
+const originalFetch=globalThis.fetch;
+globalThis.fetch=(async(input,options)=>{
+  const url=String(input);
+  if(url===DEFAULT_UPDATE_FEED)return Response.json({tag_name:'v0.6.2',draft:false,prerelease:false,published_at:'2026-10-08T00:00:00.000Z',assets:[{name:'release.json',state:'uploaded',browser_download_url:updateBase+'release.json'},{name:updateName,state:'uploaded',browser_download_url:updateBase+updateName,size:updateBytes.length,digest:'sha256:'+updateHash}]});
+  if(url===updateBase+'release.json')return Response.json(updateManifest);
+  if(url===updateBase+updateName)return new Response(updateBytes);
+  return originalFetch(input,options);
+}) as typeof fetch;
 
 app.on('browser-window-created', (_event, window) => {
   window.hide();
@@ -35,7 +49,7 @@ app.on('browser-window-created', (_event, window) => {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       assert.equal(ready, true, 'The desktop renderer and preload must load.');
-      assert.equal(await window.webContents.executeJavaScript("document.querySelector('.sidebar-version span').textContent"), `v${version}`);
+      assert.equal(await window.webContents.executeJavaScript("document.querySelector('.sidebar-version span').textContent"), `v${process.env.HUB_DESKTOP_EXPECTED_VERSION??version}`);
       const state = await window.webContents.executeJavaScript('window.hub.getState()');
       assert.equal(state.cards.length, 0);
       assert.equal(state.settings.autoLogin, false);
@@ -156,6 +170,16 @@ app.on('browser-window-created', (_event, window) => {
         await window.webContents.executeJavaScript("document.querySelector('button[aria-label=\"设置与备份\"]').click()");
         await waitFor("Boolean(document.querySelector('.release-panel'))");
         assert.equal(await window.webContents.executeJavaScript("Boolean(document.querySelector('.release-panel'))"),true);
+        if((process.env.HUB_DESKTOP_EXPECTED_VERSION??version)==='0.6.1'){
+          const update=await window.webContents.executeJavaScript('window.hub.checkUpdates()');
+          assert.equal(update.source,'github');assert.equal(update.available,true);
+          const prepared=await window.webContents.executeJavaScript('window.hub.prepareUpdate()');
+          assert.deepEqual(readFileSync(prepared.filePath),updateBytes);assert.ok(existsSync(prepared.backupPath));
+          const opened:string[]=[];shell.openPath=async path=>{opened.push(path);return'synthetic-stop-before-launch';};
+          await assert.rejects(window.webContents.executeJavaScript('window.hub.installUpdate()'),/未能启动/);
+          assert.deepEqual(opened,[prepared.filePath]);
+          assert.equal((await window.webContents.executeJavaScript('window.hub.getState()')).cards.length,1);
+        }
         await screenshot('settings.png');
         // Restore the original empty main fixture; the second process checks that snapshot.
         dialog.showOpenDialog=(async()=>({canceled:false,filePaths:[backupPath]})) as typeof dialog.showOpenDialog;

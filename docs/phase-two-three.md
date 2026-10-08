@@ -28,58 +28,44 @@
 
 ## 发布配置
 
-应用在「设置与备份 → 程序更新」中读取维护者提供的公开 HTTPS JSON 地址。发布清单格式如下，示例域名与校验值需要替换为真实内容：
+程序默认使用本项目 GitHub Releases 的 latest API。高级设置仍可指定自定义 HTTPS 清单；留空恢复默认。只接受正式稳定版本，draft/prerelease 不参与更新，没有正式版本时返回明确的“暂未发布”状态。
 
-```json
-{
-  "format": "guanaitong-release",
-  "schemaVersion": 1,
-  "version": "0.6.0",
-  "publishedAt": "2026-10-08T00:00:00.000Z",
-  "notes": "发布说明",
-  "downloads": {
-    "win32-x64": {
-      "url": "https://example.com/application-setup.exe",
-      "sha256": "替换为产物的64位十六进制SHA256"
-    }
-  }
-}
-```
+GitHub 最新发布需要包含统一的 release.json，以及清单中对应系统和架构的安装包。程序核对标签版本、资产来源、API digest 与清单 SHA-256/大小；下载只跟随已知 GitHub HTTPS 资产域名。下载完成后校验，失败或取消删除本次临时文件，不覆盖数据。
 
-清单限制为 256 KiB，验证格式、版本、日期、当前系统的 HTTPS 下载地址与校验值。应用展示说明，备份数据库后打开下载链接；用户自行下载安装包，新版启动时执行结构迁移。此流程不自动运行安装程序，也不声称已验证浏览器下载文件的完整性。
+校验成功后创建数据库安全副本，界面显示已准备好。用户确认打开时再次校验缓存文件，并保存会话、再次备份，再交接给系统安装/解压工具；程序随后退出。macOS 用户将解压后的应用替换到应用目录。
 
-### 本地构建
+v0.6.0 的旧更新逻辑不支持这个完整通道，需先手动安装一次 v0.6.1。v0.6.1 不增加数据库结构版本，仍为 v3；后续结构升级继续使用版本化迁移与升级前备份。
 
-```sh
-npm run check
-npm run test:desktop
-npm run release:win
-# 在 macOS 上：
-npm run release:mac
-# 必须签名时：
-node scripts/build-release.mjs win --signed
-```
+### 构建与多平台清单
 
-构建输出安装包和 `SHA256SUMS-*.txt`。设置 `RELEASE_BASE_URL` 后，按真实产物生成平台清单；没有真实地址时不生成带虚构链接的清单。多平台发布时将各自 `downloads` 合并为共同清单。
+本地使用 npm run release:win，Mac 上使用 npm run release:mac，可追加 --arch x64 或 --arch arm64。发布地址默认从 package.json 的仓库信息或 GITHUB_REPOSITORY 推导，也可通过 RELEASE_BASE_URL 指定。
+
+每个平台产物记录实际文件大小、SHA-256、程序版本和数据库版本。Windows x64、macOS arm64/x64 三份清单由 scripts/merge-release.mjs 合并为统一 release.json 和 SHA256SUMS.txt。合并前实际读取安装包验证大小和校验值，缺少平台、版本不一致、文件缺失或校验失败时拒绝组装。
+
+版本说明只提取 CHANGELOG.md 中当前版本段落，不把所有历史记录并入新发布说明。
 
 ### 签名与公证
 
 | 平台 | 环境变量 |
 | --- | --- |
-| Windows | `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`，或 electron-builder 的 `CSC_LINK` 回退 |
-| macOS | `CSC_LINK` / `CSC_KEY_PASSWORD`，或钥匙串身份 `CSC_NAME` |
-| macOS 公证 | `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` |
+| Windows | WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD，或 CSC_LINK 回退 |
+| macOS | CSC_LINK / CSC_KEY_PASSWORD，或钥匙串身份 CSC_NAME |
+| macOS 公证 | APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID |
 
-证书及口令放在环境变量或 GitHub Secrets，不能提交源码。强制签名时缺少可用证书会失败，未签名产物不能标为已签名。
+证书与口令放在环境变量或 GitHub Secrets，不能提交源码。强制签名缺少证书时失败；未签名产物不会标记为已签名。
 
-### GitHub Actions
+### GitHub 发布工作流
 
-- `ci.yml`：Windows/macOS 执行代码检查、合成测试、原生桌面验证和目录打包。
-- `release.yml`：手动准备平台产物，默认要求签名；上传 Actions artifacts，不自动发布 GitHub Release。
-- 仓库变量：`RELEASE_BASE_URL`。
-- 仓库 Secrets：`WIN_CSC_*`、`MAC_CSC_*` 及所需 `APPLE_*`。
+release.yml 通过 workflow_dispatch 手动运行，默认 signed=true、create_draft=true：
 
-Windows/macOS 的原生检查与目录打包已通过首次[公开 Actions 验证](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37738342471)。后续状态以 Actions 实际结果为准；真实证书签名、公证、用户设备安装和正式发布源仍需对应环境验收。
+1. 分别构建 Windows x64、macOS arm64 与 macOS x64，运行代码检查和原生桌面测试。
+2. 组装统一清单并重新验证实际安装包。
+3. 可将三类安装包、release.json 和校验清单上传到版本草稿；不会自动发布给稳定更新用户。
+4. 维护者审查签名、公证和安装验证后，才将草稿转为正式 Release。
+
+没有配置签名证书时，可设置 signed=false 验证草稿流程；这不会取得发布者签名或公证。工作流拒绝覆盖已有正式版本。
+
+ci.yml 继续执行 Windows/macOS 的代码、模拟登录、原生加密与目录打包检查。工作流中的 build 任务仅有读取权限，草稿组装任务单独使用 contents:write。
 
 ## 公开仓库规则
 

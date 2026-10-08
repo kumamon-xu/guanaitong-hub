@@ -22,6 +22,7 @@ import { validateIPC } from './ipc-validation';
 import { ReleaseService } from './release-service';
 import { exportOrderCSV } from './order-export';
 import type { SyncTask, OrderQuery } from '../src/shared/operations';
+import { version as applicationVersion } from '../package.json';
 
 // Keep the same vault and OS keychain identity in development and packaged builds.
 app.setName('guanaitong-hub');
@@ -37,6 +38,7 @@ let syncManager:SyncManager;
 let releaseService:ReleaseService;
 let revision=0;
 let restoring = false;
+let upgrading = false;
 let remoteOperations = 0;
 let sessionEpoch = 0;
 const cardWindows = new Map<string, BrowserWindow>();
@@ -276,7 +278,7 @@ async function checkout(id: string) {
 function registerIPC() {
   const handle=(name:string,handler:(...args:any[])=>any)=>ipcMain.handle(`hub:${name}`,(event,...args)=>{
     if(event.sender!==mainWindow?.webContents||event.senderFrame!==mainWindow.webContents.mainFrame)throw new Error('无权访问本地卡片数据');
-    if(restoring)throw new Error('正在恢复备份，请稍后再操作');
+    if(restoring||upgrading)throw new Error('正在恢复或交接更新，请稍后再操作');
     validateIPC(name,args);
     return handler(...args);
   });
@@ -293,6 +295,19 @@ function registerIPC() {
   handle('price-history',(id,sourceId)=>database.priceHistory(id,sourceId));
   handle('check-updates',()=>releaseService.check(store.getViewState().settings.updateFeed??''));
   handle('open-update',()=>releaseService.open());
+  handle('prepare-update',()=>releaseService.prepare());
+  handle('cancel-update',()=>releaseService.cancel());
+  handle('install-update',async()=>{
+    if(remoteOperations||syncManager.running||publishingAddresses.size||cardWindows.size||automaticWindows.size)throw new Error('请等待同步完成并关闭官网窗口，再打开安装包');
+    upgrading=true;
+    try{
+      for(const timer of sessionTimers.values())clearTimeout(timer);
+      sessionTimers.clear();
+      await Promise.all([...sessions.keys()].map(id=>saveSession(id)));
+      await sessionVault.flush();await database.flush();
+      await releaseService.install();app.quit();
+    }catch(error){upgrading=false;throw error;}
+  });
   handle('export-orders',async(query:OrderQuery)=>{
     const rows=[];let page=1,total=0;
     do{const result=database.queryOrders({...query,page,pageSize:100});rows.push(...result.items);total=result.total;page++;}while(rows.length<total);
@@ -401,6 +416,7 @@ async function confirmRestore(prepared:PreparedRestore):Promise<boolean>{
   return result.response===1;
 }
 async function applyRestore(prepared:PreparedRestore):Promise<void>{
+  if(releaseService.busy)throw new Error('请先完成或取消程序更新下载');
   if(restoring)throw new Error('另一项恢复正在进行');
   if(prepared.data&&(remoteOperations||syncManager.running||runningSync.size||publishingAddresses.size||cardWindows.size||automaticWindows.size||store.getViewState().cards.some(card=>loginCoordinator.isRunning(card.id))))throw new Error('请先等待官网操作完成，并关闭官网窗口后恢复卡片备份');
   restoring=true;
@@ -454,7 +470,10 @@ app.whenReady().then(async()=>{
     backupService=new BackupService(database,store,addressVault);
     const taskOptions={concurrency:()=>store.getViewState().settings.syncConcurrency??2,persist:(task:SyncTask)=>{const clean={...task,message:redactText(task.message,store.getViewState().cards.map(card=>card.number))};void database.enqueueWrite(()=>database.saveSyncTask(clean)).catch(()=>{});},changed:notifyTasks};
     syncManager=new SyncManager({...taskOptions,initial:database.recoverInterruptedTasks()});
-    releaseService=new ReleaseService(app.getVersion(),process.platform,process.arch,fetch,database,url=>shell.openExternal(url));
+    releaseService=new ReleaseService(applicationVersion,process.platform,process.arch,fetch,database,url=>shell.openExternal(url),{
+      directory:join(app.getPath('userData'),'updates'),openPath:path=>shell.openPath(path),
+      progress:value=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('hub:update-progress',value);},
+    });
     mainWindow=new BrowserWindow({width:1420,height:960,minWidth:940,minHeight:650,title:'关爱通卡管家',backgroundColor:'#f7f8fa',webPreferences:{preload:join(__dirname,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true}});
     mainWindow.on('closed',()=>app.quit());
     mainWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
@@ -473,7 +492,7 @@ app.whenReady().then(async()=>{
 app.on('window-all-closed',()=>{app.quit();});
 app.on('before-quit',event=>{
   if(quitting||!database)return;
-  event.preventDefault();quitting=true;syncManager?.cancel();
+  event.preventDefault();quitting=true;syncManager?.cancel();releaseService?.cancel();
   for(const timer of sessionTimers.values())clearTimeout(timer);
   Promise.allSettled([...sessions.keys()].map(id=>saveSession(id))).then(()=>sessionVault?.flush()).finally(async()=>{await database.flush();try{database.close();}finally{app.quit();}}).catch(()=>{});
 });

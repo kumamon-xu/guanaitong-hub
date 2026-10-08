@@ -25,7 +25,13 @@ export interface SyncTask {
 }
 export interface PriceHistory { id: string; cardId: string; sourceId: string; at: string; price: number | null; unit: string; }
 export interface ManagementData { priceHistory: PriceHistory[]; syncTasks: SyncTask[]; }
-export interface UpdateInfo { currentVersion: string; version: string; available: boolean; notes: string; url: string; publishedAt: string; }
+export interface UpdateInfo {
+  currentVersion: string; version: string; available: boolean; notes: string; url: string; publishedAt: string;
+  status?: 'available' | 'current' | 'unpublished' | 'unsupported'; source?: 'github' | 'manifest';
+  releaseUrl?: string; sha256?: string; size?: number; databaseVersion?: number;
+}
+export interface UpdateProgress { phase: 'downloading' | 'verifying' | 'backing-up' | 'ready'; downloaded: number; total: number | null; }
+export interface PreparedUpdate { version: string; filePath: string; sha256: string; size: number; backupPath: string; }
 export interface AppSummary { products: number; offers: number; orders: number; favorites: number; }
 export const DEFAULT_PRODUCT_QUERY: ProductQuery = { page: 1, pageSize: 24, cardId: 'all', search: '', category: '全部分类', favoritesOnly: false, price: { amounts: [], unit: 'all', sort: 'default' } };
 export const DEFAULT_ORDER_QUERY: OrderQuery = { page: 1, pageSize: 40, cardId: 'all', search: '', status: 'all', from: '', to: '' };

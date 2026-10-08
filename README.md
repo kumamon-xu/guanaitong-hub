@@ -3,7 +3,7 @@
   <h1>关爱通卡管家</h1>
   <p>把福利卡、商品、兑换清单与历史订单，放在同一个本地空间。</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.6.0-52754b" alt="版本 0.6.0" />
+    <img src="https://img.shields.io/badge/version-0.6.1-52754b" alt="版本 0.6.1" />
     <img src="https://img.shields.io/badge/Node.js-%E2%89%A524-43853d" alt="Node.js 24 或更新版本" />
     <img src="https://img.shields.io/badge/Electron-44-47848f" alt="Electron 44" />
     <img src="https://img.shields.io/badge/storage-SQLite-003b57" alt="SQLite 本地存储" />
@@ -32,7 +32,7 @@
 | 兑换清单 | 指定卡片及具体报价、库存/余额校验、同单位预算提示、打开官网确认兑换 |
 | 同步任务 | 实际阶段与分页进度、取消、失败项重试、1～3 张卡受控并发、批次记录 |
 | 订单与地址 | 订单卡片/状态/日期筛选、脱敏 CSV 导出、本地地址簿、官网地址只读查询及单独确认的新增操作 |
-| 数据与更新 | SQLite 事务、系统加密、版本化迁移、统一口令备份、恢复预览、脱敏诊断、更新检查 |
+| 数据与更新 | SQLite 事务、系统加密、版本化迁移、统一口令备份、恢复预览、脱敏诊断、GitHub 更新、下载校验与安装交接 |
 
 ## 快速开始
 
@@ -70,6 +70,12 @@ npm run package:mac      # macOS 程序目录，在 Mac 上运行
 
 产物位于 `release/`，不纳入 Git。Windows 目录程序需保留完整的 `win-unpacked` 目录，也可使用 `scripts/start-windows.cmd` 启动。签名安装包和更新清单的准备流程见[发布配置](docs/phase-two-three.md#发布配置)。
 
+## 程序升级
+
+默认更新源已接入本项目的 GitHub Releases，无需填写地址。检查正式版本后，先下载并校验 SHA-256/大小，再备份数据库；确认打开更新包时再次校验和备份，保存会话后退出交接。没有正式 Release 时会明确提示，草稿和预发布不会作为稳定更新。
+
+**v0.6.0 需要先手动安装一次 v0.6.1**，之后使用新的 GitHub 更新流程。v0.6.1 的数据库仍为 v3，原卡片、地址和会话继续沿用；不要清空应用数据目录。发布草稿、平台清单及签名配置见[发布配置](docs/phase-two-three.md#发布配置)。
+
 ## 数据与隐私
 
 - 数据使用本地 SQLite，无需单独维护数据库服务。卡号、密码、地址、Cookie 及自由文本载荷在入库前使用 Electron `safeStorage` 加密。
@@ -92,7 +98,7 @@ git add <reviewed-files>
 npm run audit:public         # 审查 Git 暂存区是否适合公开
 ```
 
-常规测试不会访问个人应用数据或登录真实账号。114 项测试及 Windows/macOS 首次在线检查已通过；范围、限制和检查方法见[验证说明](docs/verification.md)。自动检查与手动签名构建配置位于 `.github/workflows/`。
+常规测试不会访问个人应用数据或登录真实账号。129 项本地测试、原生更新验证及旧版写入→新版读取回归已通过；Windows/macOS 在线状态以工作流为准；范围、限制和检查方法见[验证说明](docs/verification.md)。自动检查与手动签名构建配置位于 `.github/workflows/`。
 
 ```text
 src/          React 页面、共享类型、筛选与预算规则

@@ -78,7 +78,7 @@ export function createDemoAPI(): HubAPI {
     queryOrders:async query=>queryOrdersInMemory(state,query),
     exportOrders:async()=>{await blocked();return false;},
     getSyncTasks:async()=>[],cancelSync:async()=>{},retryFailedSync:async()=>[],onSyncTasks:()=>()=>{},
-    getPriceHistory:async()=>[],checkUpdates:async()=>{await blocked();throw new Error('演示模式');},openUpdate:blocked,
+    getPriceHistory:async()=>[],checkUpdates:async()=>{await blocked();throw new Error('演示模式');},openUpdate:blocked,prepareUpdate:async()=>{await blocked();throw new Error('演示模式');},cancelUpdate:blocked,installUpdate:blocked,onUpdateProgress:()=>()=>{},
     addCards: async inputs => { state.cards.push(...inputs.map((input, index) => ({ id: `demo-added-${Date.now()}-${index}`, number: input.number, label: input.label || `演示卡 ${state.cards.length + index + 1}`, status: 'pending' as const, balance: null, balanceUnit: '元', expiresAt: null, syncedAt: null, addedAt: new Date().toISOString(), archived: false, note: '演示卡片；不会连接官网或保存密码', error: null, productCount: 0, hasPassword: false }))); return save(); },
     updateCard: async (id, patch) => { state.cards = state.cards.map(card => card.id === id ? { ...card, ...patch } : card); return save(); },
     openCard: blocked,

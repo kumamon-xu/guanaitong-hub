@@ -1,7 +1,7 @@
 export type CardStatus = 'pending' | 'active' | 'expired' | 'exhausted' | 'error';
 export type { AddressDraft, LocalAddress } from '../../electron/addresses';
 import type { AddressDraft, LocalAddress } from '../../electron/addresses';
-import type { AppSummary, ProductQuery, ProductPage, OrderQuery, OrderPage, SyncTask, PriceHistory, UpdateInfo } from './operations';
+import type { AppSummary, ProductQuery, ProductPage, OrderQuery, OrderPage, SyncTask, PriceHistory, UpdateInfo, PreparedUpdate, UpdateProgress } from './operations';
 export interface RegionOption { id: string; name: string; children: RegionOption[] | null; }
 export interface OfficialAddress { id: string; draft: AddressDraft; isDefault: boolean; }
 export interface AddressPublishResult { id: string; created: boolean; }
@@ -48,6 +48,10 @@ export interface HubAPI {
   getPriceHistory(cardId: string, sourceId: string): Promise<PriceHistory[]>;
   checkUpdates(): Promise<UpdateInfo>;
   openUpdate(): Promise<void>;
+  prepareUpdate(): Promise<PreparedUpdate>;
+  cancelUpdate(): Promise<void>;
+  installUpdate(): Promise<void>;
+  onUpdateProgress(callback:(progress:UpdateProgress)=>void):()=>void;
   getAddresses(): Promise<LocalAddress[]>;
   saveAddress(draft: AddressDraft, id?: string): Promise<LocalAddress>;
   setDefaultAddress(id: string): Promise<LocalAddress[]>;
