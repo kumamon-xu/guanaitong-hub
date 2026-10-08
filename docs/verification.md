@@ -8,7 +8,7 @@
 
 | 检查 | 本地结果 | 范围 |
 | --- | --- | --- |
-| `npm run check` | 129 项测试通过 | ESLint、TypeScript、合成单元测试 |
+| `npm run check` | 130 项测试通过 | ESLint、TypeScript、合成单元测试 |
 | `npm run test:login-browser` | 三组合成回归通过 | 隐藏成功、提交就绪等待、失败后手动接续 |
 | `npm run test:desktop` | Windows 原生检查通过 | IPC、系统加密、SQLite、恢复预览及跨进程读取 |
 | 安装包入口检查 | Windows 包内入口通过 | 与原生桌面检查相同的测试流程 |

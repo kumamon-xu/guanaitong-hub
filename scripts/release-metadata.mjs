@@ -2,6 +2,12 @@ import { createHash } from 'node:crypto';
 import { readFileSync,statSync } from 'node:fs';
 import { basename } from 'node:path';
 import { DATABASE_VERSION } from '../electron/database-migrations.ts';
+export function signingEnvironment(environment,signed){
+  const env={...environment},keys=['CSC_LINK','CSC_KEY_PASSWORD','CSC_NAME','CSC_KEYCHAIN','WIN_CSC_LINK','WIN_CSC_KEY_PASSWORD','APPLE_ID','APPLE_APP_SPECIFIC_PASSWORD','APPLE_TEAM_ID'];
+  for(const key of keys)if(env[key]===''||!signed)delete env[key];
+  if(!signed)env.CSC_IDENTITY_AUTO_DISCOVERY='false';
+  return env;
+}
 
 export function versionNotes(changelog,version){
   const sections=changelog.split(/^#\s+/m).filter(Boolean);

@@ -3,11 +3,15 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync,writeFileSync } from 'node:fs';
 import { basename,resolve } from 'node:path';
-import { artifactManifest,versionNotes } from './release-metadata.mjs';
+import { artifactManifest,versionNotes,signingEnvironment } from './release-metadata.mjs';
 
 const platform=process.argv[2];
 if(!['win','mac'].includes(platform))throw new Error('Usage: node scripts/build-release.mjs win|mac [--signed]');
 const signed=process.argv.includes('--signed')||process.env.REQUIRE_SIGNED==='true';
+const normalizedSigning=signingEnvironment(process.env,signed);
+for(const key of ['CSC_LINK','CSC_KEY_PASSWORD','CSC_NAME','CSC_KEYCHAIN','WIN_CSC_LINK','WIN_CSC_KEY_PASSWORD','APPLE_ID','APPLE_APP_SPECIFIC_PASSWORD','APPLE_TEAM_ID','CSC_IDENTITY_AUTO_DISCOVERY']){
+  if(normalizedSigning[key]===undefined)delete process.env[key];else process.env[key]=normalizedSigning[key];
+}
 if(signed&&platform==='win'&&!process.env.WIN_CSC_LINK&&!process.env.CSC_LINK)throw new Error('Signed Windows release requires WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD in the environment.');
 if(signed&&platform==='mac'&&!process.env.CSC_LINK&&!process.env.CSC_NAME)throw new Error('Signed macOS release requires CSC_LINK/CSC_KEY_PASSWORD or CSC_NAME in the environment.');
 const pkg=JSON.parse(readFileSync('package.json','utf8'));

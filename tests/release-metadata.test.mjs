@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join,resolve,sep } from 'node:path';
 import { afterEach,test } from 'node:test';
-import { artifactManifest,mergeManifests,versionNotes } from '../scripts/release-metadata.mjs';
+import { artifactManifest,mergeManifests,versionNotes,signingEnvironment } from '../scripts/release-metadata.mjs';
 
 const folders=[];afterEach(()=>{for(const folder of folders.splice(0)){const path=resolve(folder);assert.ok(path.startsWith(resolve(tmpdir())+sep)&&path.split(sep).at(-1).startsWith('gat-release-metadata-'));rmSync(path,{recursive:true,force:true});}});
 function manifest(platform,arch,patch={}){
@@ -13,6 +13,11 @@ function manifest(platform,arch,patch={}){
 }
 test('release notes include only the matching version',()=>{
   assert.equal(versionNotes('# v0.6.1\n\n- 新版\n\n# v0.6.0\n\n- 旧版','0.6.1'),'- 新版');assert.throws(()=>versionNotes('# v0.6.0\nold','0.6.1'),/contain/);
+});
+test('empty CI signing secrets are absent and unsigned builds never use supplied certificates',()=>{
+  assert.deepEqual(signingEnvironment({CSC_LINK:'',WIN_CSC_LINK:'',KEEP:'yes'},true),{KEEP:'yes'});
+  const original={CSC_LINK:'fixture-certificate',WIN_CSC_LINK:'fixture-windows-certificate',CSC_KEY_PASSWORD:'fixture-password',KEEP:'yes'};
+  assert.deepEqual(signingEnvironment(original,false),{KEEP:'yes',CSC_IDENTITY_AUTO_DISCOVERY:'false'});assert.equal(original.CSC_LINK,'fixture-certificate');assert.equal(signingEnvironment(original,true).WIN_CSC_LINK,original.WIN_CSC_LINK);
 });
 test('multi-platform manifests use explicit architecture and merge all three installers',()=>{
   const parts=[manifest('win32','x64'),manifest('darwin','arm64'),manifest('darwin','x64')],merged=mergeManifests(parts);assert.deepEqual(Object.keys(merged.downloads).sort(),['darwin-arm64','darwin-x64','win32-x64']);assert.equal(merged.databaseVersion,3);for(const asset of Object.values(merged.downloads)){assert.equal(asset.size,23);assert.match(asset.sha256,/^[0-9a-f]{64}$/);}
