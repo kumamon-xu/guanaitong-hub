@@ -240,6 +240,7 @@ export class SqliteRepository implements HubRepository, AddressRepository, Sessi
     this.productCache=new Map(data.state.products.map(product=>[product.id,product]));
     data.state.products.forEach((product,i)=>{
       productStmt.run(product.id,`${product.name} ${product.brand} ${product.specification}`.toLowerCase(),i,+product.favorite);
+      if(!product.offers.length)for(const name of new Set(sourceCategories(product)))categoryStmt.run(product.id,null,null,name);
       for(const offer of product.offers){
         const card=cards.get(offer.cardId);const available=!!card&&!card.archived&&!['expired','exhausted'].includes(card.status)&&offer.stock!==0;
         offerStmt.run(product.id,offer.cardId,offer.sourceId,offer.price,offer.priceUnit.trim()||'未标注单位',+available);
@@ -258,13 +259,13 @@ export class SqliteRepository implements HubRepository, AddressRepository, Sessi
     if(q.price.unit!=='all'){clauses.push('o.unit=?');params.push(q.price.unit);}
     if(q.price.amounts.length){clauses.push('o.price IN ('+q.price.amounts.map(()=>'?').join(',')+')');params.push(...q.price.amounts);}
     const base=clauses.length?' AND '+clauses.join(' AND '):'';
-    const facetRows=this.db.prepare('SELECT c.name,COUNT(DISTINCT p.id) AS count FROM hub_products p JOIN hub_offers o ON o.product_id=p.id JOIN hub_categories c ON c.product_id=o.product_id AND c.card_id=o.card_id AND c.source_id=o.source_id WHERE 1=1'+base+' GROUP BY c.name ORDER BY c.name').all(...params);
-    const all=Number(this.db.prepare('SELECT COUNT(DISTINCT p.id) AS n FROM hub_products p JOIN hub_offers o ON o.product_id=p.id WHERE 1=1'+base).get(...params)!.n);
-    if(q.category!=='全部分类'){clauses.push('EXISTS (SELECT 1 FROM hub_categories c WHERE c.product_id=o.product_id AND c.card_id=o.card_id AND c.source_id=o.source_id AND c.name=?)');params.push(q.category);}
+    const facetRows=this.db.prepare('SELECT c.name,COUNT(DISTINCT p.id) AS count FROM hub_products p LEFT JOIN hub_offers o ON o.product_id=p.id JOIN hub_categories c ON c.product_id=p.id AND c.card_id IS o.card_id AND c.source_id IS o.source_id WHERE 1=1'+base+' GROUP BY c.name ORDER BY c.name').all(...params);
+    const all=Number(this.db.prepare('SELECT COUNT(DISTINCT p.id) AS n FROM hub_products p LEFT JOIN hub_offers o ON o.product_id=p.id WHERE 1=1'+base).get(...params)!.n);
+    if(q.category!=='全部分类'){clauses.push('EXISTS (SELECT 1 FROM hub_categories c WHERE c.product_id=p.id AND c.card_id IS o.card_id AND c.source_id IS o.source_id AND c.name=?)');params.push(q.category);}
     if(q.favoritesOnly)clauses.push('p.favorite=1');
     if(q.search.trim()){clauses.push('instr(p.search,?)>0');params.push(q.search.trim().toLowerCase());}
     const where=clauses.length?' AND '+clauses.join(' AND '):'';
-    const groups=' FROM hub_products p JOIN hub_offers o ON o.product_id=p.id WHERE 1=1'+where+' GROUP BY p.id';
+    const groups=' FROM hub_products p LEFT JOIN hub_offers o ON o.product_id=p.id WHERE 1=1'+where+' GROUP BY p.id';
     const total=Number(this.db.prepare('SELECT COUNT(*) AS n FROM (SELECT p.id'+groups+')').get(...params)!.n);
     const sort=q.price.sort==='default'?'p.position':'display_price IS NULL,display_price '+(q.price.sort==='descending'?'DESC':'ASC')+',p.position';
     const rows=this.db.prepare('SELECT p.id, MIN(CASE WHEN o.available=1 THEN o.price END) AS display_price'+groups+' ORDER BY '+sort+' LIMIT ? OFFSET ?').all(...params,q.pageSize,(q.page-1)*q.pageSize);

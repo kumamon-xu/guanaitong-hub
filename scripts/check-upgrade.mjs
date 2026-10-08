@@ -15,7 +15,7 @@ try{
   const entry=join(root,'upgrade-check.cjs');await build({entryPoints:['tests/desktop.electron.ts'],outfile:entry,bundle:true,platform:'node',format:'cjs',external:['electron'],target:'node24'});
   for(const phase of ['write','read']){
     const env={...process.env};for(const name of Object.keys(env))if(name.startsWith('HUB_')||name==='ELECTRON_RUN_AS_NODE')delete env[name];
-    Object.assign(env,{HUB_DESKTOP_TEST_ROOT:root,HUB_DESKTOP_TEST_PHASE:phase,HUB_DESKTOP_TEST_ENTRY:phase==='write'?old:resolve('dist-electron/main.cjs'),HUB_DESKTOP_EXPECTED_VERSION:phase==='write'?oldVersion:pkg.version});
+    Object.assign(env,{HUB_DESKTOP_TEST_ROOT:root,HUB_DESKTOP_TEST_PHASE:phase,HUB_DESKTOP_TEST_ENTRY:phase==='write'?old:resolve('dist-electron/main.cjs'),HUB_DESKTOP_EXPECTED_VERSION:phase==='write'?oldVersion:pkg.version,HUB_DESKTOP_TEST_LEGACY:phase==='write'?'1':'0'});
     const child=spawn(electronPath,[entry],{env,stdio:'inherit',windowsHide:true});
     await new Promise((done,reject)=>{const timer=setTimeout(()=>{child.kill();reject(new Error('Upgrade regression timed out'));},45000);child.once('error',error=>{clearTimeout(timer);reject(error);});child.once('exit',code=>{clearTimeout(timer);code===0?done():reject(new Error('Upgrade regression failed'));});});
   }

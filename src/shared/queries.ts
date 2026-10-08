@@ -3,8 +3,8 @@ import type { ProductQuery, ProductPage, OrderQuery, OrderPage } from './operati
 import { resolvePriceFilter, sortProductsByPrice, priceFilterUnits, priceFilterAmounts } from './price-filter';
 
 export const categoryName=(name:string)=>({'3C数码':'数码3C','母婴玩具宠物':'母婴玩具·宠物','母婴玩具':'母婴玩具·宠物'}[name]??name);
-export function sourceCategories(product:Product,offer:ProductOffer):string[]{
-  return (offer.categories?.length?offer.categories:product.offers.length===1?(product.categories?.length?product.categories:[product.category]):['未分类']).filter(Boolean).map(categoryName);
+export function sourceCategories(product:Product,offer?:ProductOffer):string[]{
+  return (offer?.categories?.length?offer.categories:!offer||product.offers.length===1?(product.categories?.length?product.categories:[product.category]):['未分类']).filter(Boolean).map(categoryName);
 }
 function text(value:unknown,max=500):asserts value is string{if(typeof value!=='string'||value.length>max)throw new Error('查询文字无效');}
 export function validateProductQuery(value:ProductQuery):ProductQuery{
@@ -26,11 +26,11 @@ function validatePagination(value:{page:number;pageSize:number}):void{
 export function queryProductsInMemory(state:AppState,query:ProductQuery):ProductPage{
   const q=validateProductQuery(query);
   const available=(offer:ProductOffer)=>{const card=state.cards.find(item=>item.id===offer.cardId);return !!card&&!card.archived&&!['expired','exhausted'].includes(card.status)&&offer.stock!==0;};
-  const matches=(offer:ProductOffer)=>{const product=state.products.find(item=>item.offers.includes(offer));return !!product&&(q.category==='全部分类'||sourceCategories(product,offer).includes(q.category));};
-  const base=sortProductsByPrice(state.products,q.cardId,q.price,available);
-  const allNames=[...new Set(state.products.flatMap(product=>product.offers.flatMap(offer=>sourceCategories(product,offer))))];
-  const counts=allNames.map(name=>({name,count:sortProductsByPrice(state.products,q.cardId,q.price,available,offer=>{const product=state.products.find(item=>item.offers.includes(offer));return !!product&&sourceCategories(product,offer).includes(name);}).length}));
-  const rows=sortProductsByPrice(state.products,q.cardId,q.price,available,matches).filter(item=>(!q.favoritesOnly||item.favorite)&&`${item.name} ${item.brand} ${item.specification}`.toLowerCase().includes(q.search.trim().toLowerCase()));
+  const sort=(category='全部分类')=>sortProductsByPrice(state.products.filter(product=>product.offers.length||category==='全部分类'||sourceCategories(product).includes(category)),q.cardId,q.price,available,offer=>{const product=state.products.find(item=>item.offers.includes(offer));return !!product&&(category==='全部分类'||sourceCategories(product,offer).includes(category));},true);
+  const base=sort();
+  const allNames=[...new Set(state.products.flatMap(product=>product.offers.length?product.offers.flatMap(offer=>sourceCategories(product,offer)):sourceCategories(product)))];
+  const counts=allNames.map(name=>({name,count:sort(name).length}));
+  const rows=sort(q.category).filter(item=>(!q.favoritesOnly||item.favorite)&&`${item.name} ${item.brand} ${item.specification}`.toLowerCase().includes(q.search.trim().toLowerCase()));
   return {items:structuredClone(rows.slice((q.page-1)*q.pageSize,q.page*q.pageSize)),total:rows.length,page:q.page,pageSize:q.pageSize,categories:[{name:'全部分类',count:base.length},...counts],units:priceFilterUnits(state.products,q.cardId),amounts:priceFilterAmounts(state.products,q.cardId,q.price.unit)};
 }
 export function queryOrdersInMemory(state:AppState,query:OrderQuery):OrderPage{

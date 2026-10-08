@@ -289,6 +289,45 @@ test('redemption counts are never compared to monetary prices; same count units 
   assert.throws(() => store.addToCart(id, first.id, 1), /兑换次数不足/);
 });
 
+test('unknown quotes cannot bypass the known subtotal limit when adding, updating or quoting a cart', () => {
+  const { store } = fixture();
+  const [first] = cards(store);
+  const known = product(first.id, 'known', { mergeKey: '' }, 10);
+  const unknown = product(first.id, 'unknown', { mergeKey: '' });
+  unknown.offers[0].price = null;
+  store.applySnapshot(first.id, { card: { status: 'active', balance: 25, balanceUnit: '元' }, products: [known, unknown] });
+  store.addToCart(unknown.id, first.id, 1);
+  store.addToCart(known.id, first.id, 2);
+  assert.equal(store.quoteCart(first.id).total, null);
+  const before = store.getState();
+  assert.throws(() => store.addToCart(known.id, first.id, 1), /余额或兑换次数不足/);
+  assert.throws(() => store.updateCart(before.cart.find(item => item.productId === known.id)!.id, 3), /余额或兑换次数不足/);
+  assert.deepEqual(store.getState(), before);
+  known.offers[0].price = 15;
+  store.applySnapshot(first.id, { products: [known, unknown] });
+  assert.throws(() => store.quoteCart(first.id), /余额或兑换次数不足/);
+});
+
+test('mixed units and missing quote units cannot hide an exceeded known redemption subtotal', () => {
+  const { store } = fixture();
+  const [first] = cards(store);
+  const counted = product(first.id, 'counted', { mergeKey: '' }, 1);
+  counted.offers[0].priceUnit = '兑换次数';
+  const money = product(first.id, 'money', { mergeKey: '' }, 500);
+  const noUnit = product(first.id, 'no-unit', { mergeKey: '' }, 500);
+  noUnit.offers[0].priceUnit = '';
+  store.applySnapshot(first.id, { card: { status: 'active', balance: 2, balanceUnit: '次' }, products: [counted, money, noUnit] });
+  store.addToCart(money.id, first.id, 1);
+  store.addToCart(noUnit.id, first.id, 1);
+  store.addToCart(counted.id, first.id, 2);
+  assert.equal(store.quoteCart(first.id).total, null);
+  assert.throws(() => store.addToCart(counted.id, first.id, 1), /兑换次数不足/);
+  const before = store.getState();
+  store.applySnapshot(first.id, { card: { balance: null } });
+  store.updateCart(before.cart.find(item => item.productId === counted.id)!.id, 3);
+  assert.equal(store.quoteCart(first.id).total, null);
+});
+
 test('unknown price and stock warn without inventing a total; expiry includes China calendar end of day', () => {
   const { store } = fixture();
   const [first] = cards(store);

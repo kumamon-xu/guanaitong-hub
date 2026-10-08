@@ -73,10 +73,10 @@ export function productMatchesPrice(product: Product, cardScope: string, value: 
 }
 
 /** Sorts by the displayed lowest available matching price; unpriced / unavailable products follow priced products. */
-export function sortProductsByPrice(products: readonly Product[], cardScope: string, value: PriceFilterValue, isAvailable: (offer: ProductOffer) => boolean = () => true, matchesSource: (offer: ProductOffer) => boolean = () => true): Product[] {
+export function sortProductsByPrice(products: readonly Product[], cardScope: string, value: PriceFilterValue, isAvailable: (offer: ProductOffer) => boolean = () => true, matchesSource: (offer: ProductOffer) => boolean = () => true, includeWithoutOffers = false): Product[] {
   const filter = resolvePriceFilter(value);
   if (filter.error) return [];
-  const matches = products.filter(product => productMatchesPrice(product, cardScope, value, matchesSource));
+  const matches = products.filter(product => productMatchesPrice(product, cardScope, value, matchesSource) || (includeWithoutOffers && !product.offers.length && cardScope === 'all' && filter.unit === 'all' && !filter.hasAmounts));
   if (filter.sort === 'default') return matches;
   const amounts = new Map(matches.map(product => {
     const prices = matchingPriceOffers(product, cardScope, value, matchesSource).filter(isAvailable).filter(knownPrice).map(offer => offer.price);

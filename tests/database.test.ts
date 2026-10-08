@@ -343,6 +343,34 @@ test('SQL catalog filters and sort match existing exact-source semantics, with b
   assert.throws(()=>f.db.queryProducts({...exact,pageSize:1000}),/分页/);
 });
 
+test('delisted favorites stay searchable and manageable without matching invented source quotes', () => {
+  const f = open();
+  const card = f.store.addCards([{ number: '123456789012', password: 'database-fixture-password' }]).cards[0];
+  const delisted = product(card.id, 'delisted', 12);
+  const live = product(card.id, 'live', 10);
+  f.store.applySnapshot(card.id, { card: { status: 'active', balance: 100 }, products: [delisted, live] });
+  f.store.favoriteProduct(delisted.id);
+  f.store.applySnapshot(card.id, { products: [live] });
+  assert.deepEqual(f.store.getProduct(delisted.id).offers, []);
+  const favorites = { ...structuredClone(DEFAULT_PRODUCT_QUERY), favoritesOnly: true };
+  assert.deepEqual(f.db.queryProducts(favorites).items.map(item => item.id), [delisted.id]);
+  for (const query of [DEFAULT_PRODUCT_QUERY, favorites, { ...favorites, search: 'delisted' }, { ...favorites, category: '食品' }, { ...favorites, category: '数码3C' }, { ...favorites, cardId: card.id }, { ...favorites, price: { unit: '元', amounts: [], sort: 'default' as const } }, { ...favorites, price: { unit: '元', amounts: [12], sort: 'default' as const } }]) {
+    const actual = f.db.queryProducts(query);
+    const expected = queryProductsInMemory(f.store.getState(), query);
+    assert.deepEqual(actual, { ...expected, categories: expected.categories.filter(category => category.name === '全部分类' || category.count > 0) });
+  }
+  assert.deepEqual(f.db.queryProducts(favorites).items.map(item => item.id), [delisted.id]);
+  assert.equal(f.db.queryProducts({ ...favorites, search: 'delisted' }).total, 1);
+  assert.equal(f.db.queryProducts({ ...favorites, category: '食品' }).total, 1);
+  assert.equal(f.db.queryProducts({ ...favorites, cardId: card.id }).total, 0);
+  assert.equal(f.db.queryProducts({ ...favorites, price: { unit: '元', amounts: [12], sort: 'default' } }).total, 0);
+  f.db.close();
+  const next = open(f.config);
+  assert.deepEqual(next.db.queryProducts(favorites).items.map(item => item.id), [delisted.id]);
+  next.store.favoriteProduct(delisted.id);
+  assert.equal(next.db.queryProducts(favorites).total, 0);
+});
+
 test('large catalogs use small renderer snapshots and update metadata without rewriting product/offer rows', () => {
   let encryptions=0;const config=options(),original=config.encryptString;
   config.encryptString=value=>{encryptions++;return original(value);};

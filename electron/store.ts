@@ -464,6 +464,7 @@ export class HubStore {
     const items = state.cart.filter(item => item.cardId === cardId);
     const warnings = new Set<string>();
     const units = new Map<string, string>();
+    const knownTotals = new Map<string, number>();
     let total = 0;
     let allKnown = true;
     for (const item of items) {
@@ -473,16 +474,21 @@ export class HubStore {
       if (offer.stock !== null && item.quantity > offer.stock) fail(`“${product.name}”库存不足`);
       if (offer.stock === null) warnings.add('部分商品库存未知，需在官网确认');
       if (offer.price === null || !offer.priceUnit.trim()) { allKnown = false; warnings.add('部分商品兑换价格未知，需在官网确认'); }
-      else { total += offer.price * item.quantity; units.set(unitKey(offer.priceUnit), offer.priceUnit); }
+      else {
+        const amount = offer.price * item.quantity, key = unitKey(offer.priceUnit);
+        total += amount; units.set(key, offer.priceUnit);
+        knownTotals.set(key, (knownTotals.get(key) ?? 0) + amount);
+      }
     }
     if (units.size > 1) { allKnown = false; warnings.add('清单包含不同计价单位，不能合计扣减余额'); }
     const [unit, displayUnit] = units.entries().next().value ?? [null, null];
     if (card.balance === null) warnings.add('卡片余额未知，需在官网确认');
     else if (items.length && unitKey(card.balanceUnit) === 'selection-limit') warnings.add('此卡额度为单次兑换上限，需在官网确认每次兑换和剩余次数');
-    else if (allKnown && unit && unitKey(card.balanceUnit) === unit) {
-      if (total > card.balance + 1e-8) fail('此卡余额或兑换次数不足，请调整清单');
-    } else if (items.length && unitKey(card.balanceUnit) === 'redemptions' && unit !== 'redemptions') warnings.add('此卡按兑换次数计数，商品金额不能直接扣减兑换次数');
-    else if (items.length && unit && unitKey(card.balanceUnit) !== unit) warnings.add('卡片与商品计价单位不同，需在官网确认兑换条件');
+    else {
+      if ((knownTotals.get(unitKey(card.balanceUnit)) ?? 0) > card.balance + 1e-8) fail('此卡余额或兑换次数不足，请调整清单');
+      if (items.length && unitKey(card.balanceUnit) === 'redemptions' && unit !== 'redemptions') warnings.add('此卡按兑换次数计数，商品金额不能直接扣减兑换次数');
+      else if (items.length && unit && unitKey(card.balanceUnit) !== unit) warnings.add('卡片与商品计价单位不同，需在官网确认兑换条件');
+    }
     return { items: clone(items), total: allKnown ? total : null, unit: units.size === 1 ? displayUnit : null, warnings: [...warnings] };
   }
   quoteCart(cardId: string): CartQuote { return this.quoteFromState(cardId, this.state); }

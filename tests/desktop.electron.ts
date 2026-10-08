@@ -24,13 +24,14 @@ mkdirSync(appData, { recursive: true });
 app.setPath('appData', appData);
 dialog.showErrorBox = (title, message) => { console.error(title, message); app.exit(1); };
 const updateBytes=Buffer.from('synthetic package; never execute'),updateHash=createHash('sha256').update(updateBytes).digest('hex');
-const updateBase=`https://github.com/${RELEASE_REPOSITORY}/releases/download/v0.6.2/`;
-const updateName=`guanaitong-hub-0.6.2-${process.arch}.${process.platform==='win32'?'exe':'zip'}`;
-const updateManifest={format:'guanaitong-release',schemaVersion:1,version:'0.6.2',notes:'合成更新说明',publishedAt:'2026-10-08T00:00:00.000Z',databaseVersion:3,downloads:{[process.platform+'-'+process.arch]:{url:updateBase+updateName,sha256:updateHash,size:updateBytes.length}}};
+const [major,minor,patch]=version.split('.').map(Number),updateVersion=`${major}.${minor}.${patch+1}`;
+const updateBase=`https://github.com/${RELEASE_REPOSITORY}/releases/download/v${updateVersion}/`;
+const updateName=`guanaitong-hub-${updateVersion}-${process.arch}.${process.platform==='win32'?'exe':'zip'}`;
+const updateManifest={format:'guanaitong-release',schemaVersion:1,version:updateVersion,notes:'合成更新说明',publishedAt:'2026-10-08T00:00:00.000Z',databaseVersion:3,downloads:{[process.platform+'-'+process.arch]:{url:updateBase+updateName,sha256:updateHash,size:updateBytes.length}}};
 const originalFetch=globalThis.fetch;
 globalThis.fetch=(async(input,options)=>{
   const url=String(input);
-  if(url===DEFAULT_UPDATE_FEED)return Response.json({tag_name:'v0.6.2',draft:false,prerelease:false,published_at:'2026-10-08T00:00:00.000Z',assets:[{name:'release.json',state:'uploaded',browser_download_url:updateBase+'release.json'},{name:updateName,state:'uploaded',browser_download_url:updateBase+updateName,size:updateBytes.length,digest:'sha256:'+updateHash}]});
+  if(url===DEFAULT_UPDATE_FEED)return Response.json({tag_name:'v'+updateVersion,draft:false,prerelease:false,published_at:'2026-10-08T00:00:00.000Z',assets:[{name:'release.json',state:'uploaded',browser_download_url:updateBase+'release.json'},{name:updateName,state:'uploaded',browser_download_url:updateBase+updateName,size:updateBytes.length,digest:'sha256:'+updateHash}]});
   if(url===updateBase+'release.json')return Response.json(updateManifest);
   if(url===updateBase+updateName)return new Response(updateBytes);
   return originalFetch(input,options);
@@ -119,6 +120,10 @@ app.on('browser-window-created', (_event, window) => {
         assert.equal(new AddressVault({ ...options, repository: database }).list()[0].recipient, '迁移测试收件人');
         const id=store.getState().cards[0].id;
         store.applySnapshot(id,{card:{status:'active',balance:100,balanceUnit:'元',expiresAt:'2026-10-12'},products:Array.from({length:120},(_,i)=>({id:`native-product-${i}`,name:`合成商品 ${i}`,brand:'合成品牌',category:'食品',categories:['食品'],specification:'标准规格',image:'',favorite:false,mergeKey:'',offers:[{cardId:id,sourceId:`native-source-${i}`,price:10+i%3,priceUnit:'元',stock:5,url:'https://a.guanaitong.com/product',variant:'合成规格',syncedAt:'2026-10-08T04:00:00.000Z',categories:['食品']}]})),orders:[{id:'native-order',cardId:id,sourceId:'native-order-source',name:'合成订单',amount:30,status:'已完成',createdAt:'2026-10-08T04:00:00.000Z',tracking:'',url:''}]});
+        if(process.env.HUB_DESKTOP_TEST_LEGACY!=='1'){
+          store.favoriteProduct('native-product-0');
+          store.applySnapshot(id,{products:store.getState().products.filter(product=>product.id!=='native-product-0')});
+        }
         store.updateCard(id,{tags:['福利','测试']});
         const task:SyncTask={id:'native-task',batchId:'native-batch',cardId:id,status:'failed',phase:'products',page:2,completed:100,total:120,errorKind:'schema',endpoint:'product/list',message:'合成分页响应变化',startedAt:'2026-10-08T03:59:00.000Z',finishedAt:'2026-10-08T04:00:00.000Z'};
         database.saveSyncTask(task);
@@ -151,6 +156,11 @@ app.on('browser-window-created', (_event, window) => {
         for(let attempt=0;attempt<30;attempt++){if(await window.webContents.executeJavaScript("document.querySelector('.catalog-results-head')?.textContent.includes('120') && document.querySelectorAll('.virtual-catalog .product-tile').length > 0"))break;await new Promise(resolve=>setTimeout(resolve,100));}
         assert.equal(await window.webContents.executeJavaScript("document.querySelector('.catalog-results-head').textContent.includes('120')"),true);
         assert.ok(await window.webContents.executeJavaScript("document.querySelectorAll('.virtual-catalog .product-tile').length < 30"));
+        if(process.env.HUB_DESKTOP_TEST_LEGACY!=='1'){
+          await window.webContents.executeJavaScript("document.querySelector('button[aria-label=\"取消收藏 合成商品 0\"]').click()");
+          await waitFor("Boolean(document.querySelector('button[aria-label=\"收藏 合成商品 0\"]'))");
+          assert.equal((await window.webContents.executeJavaScript(`window.hub.queryProducts(${JSON.stringify({...DEFAULT_PRODUCT_QUERY,favoritesOnly:true})})`)).total,0);
+        }
         const screenshots=process.env.HUB_DESKTOP_TEST_SCREENSHOTS;
         const screenshot=async(name:string)=>{if(!screenshots)return;for(let attempt=0;attempt<5;attempt++){await new Promise(resolve=>setTimeout(resolve,200));try{writeFileSync(join(screenshots,name),(await window.webContents.capturePage(undefined,{stayHidden:true})).toPNG());return;}catch(error){if(attempt===4)throw error;}}};
         await screenshot('catalog.png');
@@ -163,6 +173,26 @@ app.on('browser-window-created', (_event, window) => {
         const csv=join(root,'orders.csv');dialog.showSaveDialog=(async()=>({canceled:false,filePath:csv})) as typeof dialog.showSaveDialog;
         assert.equal(await window.webContents.executeJavaScript(`window.hub.exportOrders(${JSON.stringify(DEFAULT_ORDER_QUERY)})`),true);
         assert.equal(readFileSync(csv,'utf8').includes('123456789012'),false);
+        // New UI behavior is checked on the current app; legacy upgrade runs only need to preserve their data.
+        if(process.env.HUB_DESKTOP_TEST_LEGACY!=='1'){
+          await window.webContents.executeJavaScript('window.hub.updateSettings({maskNumbers:false})');
+          await window.webContents.executeJavaScript("document.querySelector('button[aria-label=\"收货地址\"]').click()");
+          await waitFor("Boolean(document.querySelector('.address-publish'))");
+          assert.equal(await window.webContents.executeJavaScript("document.querySelector('select[aria-label=\"选择地址来源卡片\"]').textContent.includes('123456789012')"),true);
+          await window.webContents.executeJavaScript("document.querySelector('.address-publish').click()");
+          await waitFor("Boolean(document.querySelector('.address-confirm-details'))");
+          assert.equal(await window.webContents.executeJavaScript("document.querySelector('select[aria-label=\"添加地址的目标卡片\"]').textContent.includes('123456789012') && document.querySelector('.address-confirm-details small').textContent.includes('123456789012')"),true);
+          await window.webContents.executeJavaScript('window.hub.updateSettings({maskNumbers:true})');
+          await waitFor("!document.querySelector('.address-page').textContent.includes('123456789012')");
+          for(const selector of ['select[aria-label="选择地址来源卡片"]','select[aria-label="添加地址的目标卡片"]','.address-confirm-details small']){
+            const text=await window.webContents.executeJavaScript(`document.querySelector(${JSON.stringify(selector)}).textContent`);
+            assert.equal(text.includes('123456789012'),false);assert.ok(text.includes('1234 •••• 9012'));
+          }
+          assert.equal(await window.webContents.executeJavaScript("document.querySelector('select[aria-label=\"添加地址的目标卡片\"]').value"),card.id);
+          await window.webContents.executeJavaScript('window.hub.updateSettings({maskNumbers:false})');
+          await waitFor("document.querySelector('.address-confirm-details small').textContent.includes('123456789012')");
+          await window.webContents.executeJavaScript("document.querySelector('button[aria-label=\"关闭官网地址确认\"]').click()");
+        }
         await window.webContents.executeJavaScript("document.querySelector('button[aria-label=\"我的卡片\"]').click()");
         await waitFor("document.querySelector('.sync-monitor')?.textContent.includes('读取商品')");
         assert.equal(await window.webContents.executeJavaScript("document.querySelector('.sync-monitor').textContent.includes('读取商品')"),true);
@@ -171,7 +201,7 @@ app.on('browser-window-created', (_event, window) => {
         await window.webContents.executeJavaScript("document.querySelector('button[aria-label=\"设置与备份\"]').click()");
         await waitFor("Boolean(document.querySelector('.release-panel'))");
         assert.equal(await window.webContents.executeJavaScript("Boolean(document.querySelector('.release-panel'))"),true);
-        if((process.env.HUB_DESKTOP_EXPECTED_VERSION??version)==='0.6.1'){
+        if(process.env.HUB_DESKTOP_TEST_LEGACY!=='1'){
           const update=await window.webContents.executeJavaScript('window.hub.checkUpdates()');
           assert.equal(update.source,'github');assert.equal(update.available,true);
           const prepared=await window.webContents.executeJavaScript('window.hub.prepareUpdate()');

@@ -3,7 +3,7 @@
   <h1>关爱通卡管家</h1>
   <p>把福利卡、商品、兑换清单与历史订单，放在同一个本地空间。</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.6.1-52754b" alt="版本 0.6.1" />
+    <img src="https://img.shields.io/badge/version-0.6.2-52754b" alt="版本 0.6.2" />
     <img src="https://img.shields.io/badge/Node.js-%E2%89%A524-43853d" alt="Node.js 24 或更新版本" />
     <img src="https://img.shields.io/badge/Electron-44-47848f" alt="Electron 44" />
     <img src="https://img.shields.io/badge/storage-SQLite-003b57" alt="SQLite 本地存储" />
@@ -80,7 +80,7 @@ npm run package:mac      # macOS 程序目录，在 Mac 上运行
 
 默认更新源已接入本项目的 GitHub Releases，无需填写地址。检查正式版本后，先下载并校验 SHA-256/大小，再备份数据库；确认打开更新包时再次校验和备份，保存会话后退出交接。没有正式 Release 时会明确提示，草稿和预发布不会作为稳定更新。
 
-**v0.6.0 需要先手动安装一次 v0.6.1**，之后使用新的 GitHub 更新流程。v0.6.1 的数据库仍为 v3，原卡片、地址和会话继续沿用；不要清空应用数据目录。发布草稿、平台清单及签名配置见[发布配置](docs/phase-two-three.md#发布配置)。
+**v0.6.0 需要先手动安装 v0.6.1 或更新版本**，之后使用新的 GitHub 更新流程。v0.6.1 用户可从程序内检查更新至 v0.6.2。数据库仍为 v3，原卡片、地址和会话继续沿用；不要清空应用数据目录。发布草稿、平台清单及签名配置见[发布配置](docs/phase-two-three.md#发布配置)。
 
 ## 数据与隐私
 

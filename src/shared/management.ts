@@ -6,17 +6,20 @@ export function expiryReminders(cards:Card[],days=30,now=Date.now()):{card:Card;
 }
 export function budgetSummary(card:Card,items:CartItem[],products:Product[]){
   const source=items.map(item=>({item,offer:products.find(product=>product.id===item.productId)?.offers.find(offer=>offer.cardId===card.id&&offer.sourceId===item.sourceId)}));
-  const units=new Set(source.flatMap(row=>row.offer?.price!==null&&row.offer?.price!==undefined?[unitKey(row.offer.priceUnit)]:[]));
-  const complete=source.every(row=>row.offer?.price!==null&&row.offer?.price!==undefined)&&units.size===1;
+  const known=source.filter(row=>row.offer?.price!==null&&row.offer?.price!==undefined&&row.offer.priceUnit.trim());
+  const units=new Set(known.map(row=>unitKey(row.offer!.priceUnit)));
+  const complete=known.length===source.length&&units.size===1;
   const total=complete?source.reduce((sum,row)=>sum+row.offer!.price!*row.item.quantity,0):null;
-  const unit=units.size===1?source.find(row=>row.offer?.price!==null&&row.offer?.price!==undefined)?.offer?.priceUnit??null:null;
+  const unit=units.size===1?known[0].offer!.priceUnit:null;
   const comparable=total!==null&&unit!==null&&unitKey(unit)===unitKey(card.balanceUnit)&&unitKey(card.balanceUnit)!=='selection-limit'&&card.balance!==null;
   const remaining=comparable?card.balance!-total!:null;
+  const knownSubtotal=known.filter(row=>unitKey(row.offer!.priceUnit)===unitKey(card.balanceUnit)).reduce((sum,row)=>sum+row.offer!.price!*row.item.quantity,0);
+  const exceeds=card.balance!==null&&unitKey(card.balanceUnit)!=='selection-limit'&&knownSubtotal>card.balance+1e-8;
   const warnings:string[]=[];
   if(!complete)warnings.push('存在未知报价或不同计价单位，无法合计');
   if(source.some(row=>!row.offer||row.offer.stock===null))warnings.push('部分库存待官网确认');
   if(card.balance===null)warnings.push('余额未知，需官网确认');
   if(card.balanceUnit==='单次任选额度')warnings.push('此卡按单次上限计算，请在官网核对每次兑换');
   else if(!comparable&&total!==null)warnings.push('卡片与报价单位不同，不能扣减合计');
-  return {total,unit,remaining,exceeds:remaining!==null&&remaining<0,warnings};
+  return {total,unit,remaining,exceeds,warnings};
 }

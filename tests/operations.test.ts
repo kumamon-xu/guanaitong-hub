@@ -83,6 +83,21 @@ test('reminders and budget keep unknown balances and single-selection limits dis
   assert.equal(budgetSummary({...card,balance:10},items,[product]).exceeds,true);
 });
 
+test('budget flags an exceeded known subtotal even when the complete total is unknown',()=>{
+  const known:Product={id:'known',name:'已知商品',brand:'',category:'',specification:'',image:'',favorite:false,mergeKey:'',offers:[{cardId:card.id,sourceId:'known-source',price:30,priceUnit:'人民币',stock:10,syncedAt:'',variant:'',url:''}]};
+  const unknown:Product={...known,id:'unknown',offers:[{...known.offers[0],sourceId:'unknown-source',price:null}]};
+  const mixed:Product={...known,id:'mixed',offers:[{...known.offers[0],sourceId:'mixed-source',price:1,priceUnit:'次'}]};
+  const noUnit:Product={...known,id:'no-unit',offers:[{...known.offers[0],sourceId:'no-unit-source',price:1,priceUnit:''}]};
+  const items=[{id:'known-item',cardId:card.id,productId:known.id,sourceId:'known-source',quantity:4},{id:'unknown-item',cardId:card.id,productId:unknown.id,sourceId:'unknown-source',quantity:1}];
+  for(const extra of [unknown,mixed,noUnit]){
+    const result=budgetSummary(card,[items[0],{...items[1],productId:extra.id,sourceId:extra.offers[0].sourceId}],[known,extra]);
+    assert.equal(result.total,null);assert.equal(result.remaining,null);assert.equal(result.exceeds,true);
+  }
+  assert.equal(budgetSummary({...card,balance:null},items,[known,unknown]).exceeds,false);
+  assert.equal(budgetSummary({...card,balanceUnit:'单次任选额度'},items,[known,unknown]).exceeds,false);
+  assert.equal(budgetSummary(card,[{...items[0],quantity:3},items[1]],[known,unknown]).exceeds,false);
+});
+
 test('CSV export masks card numbers and neutralizes spreadsheet formulas',()=>{
   const order:Order={id:'o',cardId:card.id,sourceId:' =HYPERLINK("bad")',name:'@SUM(1)',status:'已完成',amount:null,createdAt:'',tracking:'13800138000',url:''};
   const csv=exportOrderCSV([order],[card]);assert.ok(csv.startsWith('\uFEFF'));assert.ok(!csv.includes(card.number));assert.ok(!csv.includes('13800138000'));assert.ok(csv.includes("'@SUM(1)"));assert.ok(csv.includes("' =HYPERLINK"));
