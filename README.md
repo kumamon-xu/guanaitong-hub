@@ -36,9 +36,9 @@
 
 ## 快速开始
 
-下载安装包：[Windows x64](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.6.1/guanaitong-hub-0.6.1-x64-setup.exe) · [macOS Apple Silicon](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.6.1/guanaitong-hub-0.6.1-arm64.zip) · [macOS Intel](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.6.1/guanaitong-hub-0.6.1-x64.zip)。[正式发布页](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.6.1)包含版本说明与 SHA-256 校验文件。macOS 解压后将应用移入应用目录。
+下载安装包：[Windows x64](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.6.2/guanaitong-hub-0.6.2-x64-setup.exe) · [macOS Apple Silicon](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.6.2/guanaitong-hub-0.6.2-arm64.zip) · [macOS Intel](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.6.2/guanaitong-hub-0.6.2-x64.zip)。[正式发布页](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.6.2)包含版本说明与 SHA-256 校验文件。macOS 解压后将应用移入应用目录。
 
-v0.6.1 安装包尚未配置发布者签名，macOS 未公证；系统可能显示安全提示。
+v0.6.2 安装包尚未配置发布者签名，macOS 未公证；系统可能显示安全提示。
 
 ### 从源码运行
 

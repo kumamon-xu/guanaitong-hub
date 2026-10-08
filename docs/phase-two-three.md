@@ -34,7 +34,7 @@ GitHub 最新发布需要包含统一的 release.json，以及清单中对应系
 
 校验成功后创建数据库安全副本，界面显示已准备好。用户确认打开时再次校验缓存文件，并保存会话、再次备份，再交接给系统安装/解压工具；程序随后退出。macOS 用户将解压后的应用替换到应用目录。
 
-v0.6.0 的旧更新逻辑不支持这个完整通道，需先手动安装一次 v0.6.1。v0.6.1 不增加数据库结构版本，仍为 v3；后续结构升级继续使用版本化迁移与升级前备份。
+v0.6.0 的旧更新逻辑不支持这个完整通道，需先手动安装 v0.6.1 或更新版本。v0.6.2 不增加数据库结构版本，仍为 v3；后续结构升级继续使用版本化迁移与升级前备份。
 
 ### 构建与多平台清单
 
@@ -66,6 +66,8 @@ release.yml 通过 workflow_dispatch 手动运行，默认 signed=true、create_
 没有配置签名证书时，可设置 signed=false 验证草稿流程；这不会取得发布者签名或公证。工作流拒绝覆盖已有正式版本。
 
 v0.6.1 的三平台构建与组装已完成[在线验证](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37742811978)，并于 2026-10-08 转为[正式发布](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.6.1)。发布包含三类安装包、统一清单和校验文件，默认更新通道已可读取。此版本使用未签名模式，macOS 未公证；未签名模式会忽略签名环境变量，空 Secrets 不会被误当成证书路径。
+
+v0.6.2 已通过[三平台构建与清单组装](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37750960143)，并于 2026-10-08 [正式发布](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.6.2)。包含余额校验、下架收藏与地址页脱敏修复，公开更新通道和下载校验已通过。签名状态与 v0.6.1 相同。
 
 ci.yml 继续执行 Windows/macOS 的代码、模拟登录、原生加密与目录打包检查。工作流中的 build 任务仅有读取权限，草稿组装任务单独使用 contents:write。
 
