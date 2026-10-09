@@ -8,6 +8,10 @@
 
 Windows 原生桌面 IPC 在 API 返回 200 后正文断流的模拟条件下完成官方资产回退、合成安装包校验与安全备份，安装交接被测试桩阻止。仅使用隔离测试数据，未访问真实卡片接口。SQLite 与统一备份仍为 v4。
 
+Windows/macOS 的 [Desktop checks](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37908061616)及[三平台发布构建与清单组装](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37908062182)通过，构建源提交为 `df755026abfac1a2304b252709501e1cfd84984d`。安装包大小与 SHA-256 经组装阶段和 GitHub 资产 digest 复核一致。
+
+[v0.7.2](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.7.2) 已于 2026-10-09 正式发布并设为最新稳定版本。认证 API 确认 latest 标签，公开下载地址、清单和校验文件复核通过。实际更新服务以 v0.7.0、v0.7.1 和 v0.7.2 为版本参数，在三个平台分别执行正常请求、强制 API 403 与强制 HTTP 200 后正文断流共 27 项检查，包含 9 项正文断流回退；两个旧版本参数识别为可更新，v0.7.2 识别为当前版本。此检查不执行安装或修改应用数据。安装包未签名，macOS 未公证。
+
 ## v0.7.1 更新修复验证
 
 2026-10-09，实际未认证 API 请求复现 HTTP 403，响应的 `x-ratelimit-remaining` 为 0，GitHub 官方最新稳定版发布资产仍可读取。修复后的实际更新服务在相同响应下成功读取 v0.7.0 更新信息；另强制模拟 API 403 并使用真实公开资产验证回退成功。检查仅访问公开发布元数据，不执行安装或修改应用数据。

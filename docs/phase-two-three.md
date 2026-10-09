@@ -79,6 +79,8 @@ v0.7.0 已通过[三平台构建与清单组装](https://github.com/kumamon-xu/g
 
 v0.7.1 已通过[三平台构建与清单组装](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37904824254)，并于 2026-10-09 [正式发布](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.7.1)。修复 API 限流时更新检查失败，实际公开资产检查包含强制 403 回退；数据库与备份保持 v4，签名状态与 v0.7.0 相同。旧程序受限时需手动安装一次。
 
+v0.7.2 已通过[三平台构建与清单组装](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37908062182)，并于 2026-10-09 [正式发布](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.7.2)。补齐 HTTP 200 后响应体断流和超时的回退，并保留校验错误的拒绝行为；公开更新通道包含强制正文断流回退验证。数据库、备份和签名状态保持不变。
+
 ci.yml 继续执行 Windows/macOS 的代码、模拟登录、原生加密与目录打包检查。工作流中的 build 任务仅有读取权限，草稿组装任务单独使用 contents:write。
 
 ## 公开仓库规则
