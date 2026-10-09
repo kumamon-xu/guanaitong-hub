@@ -1,6 +1,6 @@
 {
   "name": "guanaitong-hub",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "关爱通卡片与兑换管理，本地桌面应用",
   "private": true,
   "type": "module",

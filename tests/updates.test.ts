@@ -26,12 +26,99 @@ function fixture(fetcher:typeof fetch){
 }
 const fetcher=(work:(url:string,init?:RequestInit)=>Promise<Response>)=>((url:unknown,init?:RequestInit)=>work(String(url),init)) as typeof fetch;
 const complete=()=>fetcher(async url=>url===DEFAULT_UPDATE_FEED?Response.json(release()):url===manifestURL?Response.json(manifest()):new Response(bytes));
+const latestManifestURL=`https://github.com/${RELEASE_REPOSITORY}/releases/latest/download/release.json`;
+const checksumURL=manifestURL.replace('release.json','SHA256SUMS.txt');
+const packageName=assetURL.split('/').at(-1)!;
+const checksumText=hash(bytes)+'  '+packageName+'\n';
+function fallbackFetcher(api:()=>Response|never, patch:{manifest?:object;checksums?:string;latestLocation?:string;checksumStatus?:number}={}, requests:string[]=[]) {
+  return fetcher(async(url,init)=>{
+    requests.push(url);assert.equal(init?.credentials,'omit');assert.equal((init?.headers as Record<string,string>).Authorization,undefined);
+    if(url===DEFAULT_UPDATE_FEED)return api();
+    if(url===latestManifestURL)return new Response('',{status:302,headers:{Location:patch.latestLocation??manifestURL}});
+    if(url===manifestURL)return new Response('',{status:302,headers:{Location:'https://release-assets.githubusercontent.com/synthetic-manifest'}});
+    if(url==='https://release-assets.githubusercontent.com/synthetic-manifest')return Response.json(manifest(patch.manifest));
+    if(url===checksumURL)return new Response(patch.checksums??checksumText,{status:patch.checksumStatus??200});
+    if(url===assetURL)return new Response(bytes);
+    throw new Error('Unexpected synthetic request: '+url);
+  });
+}
 
 test('default source resolves GitHub release, manifest, platform and API digest without cookies',async()=>{
   const requests:{url:string;init?:RequestInit}[]=[];
   const f=fixture(fetcher(async(url,init)=>{requests.push({url,init});return url===DEFAULT_UPDATE_FEED?Response.json(release()):Response.json(manifest());}));
   const info=await f.service.check('');assert.equal(info.source,'github');assert.equal(info.available,true);assert.equal(info.sha256,hash(bytes));assert.equal(info.size,bytes.length);
   assert.deepEqual(requests.map(item=>item.url),[DEFAULT_UPDATE_FEED,manifestURL]);assert.ok(requests.every(item=>item.init?.credentials==='omit'&&item.init.redirect==='manual'));assert.equal((requests[0].init!.headers as Record<string,string>).Authorization,undefined);
+});
+
+test('GitHub API rate limits and temporary outages fall back to the official latest stable assets',async()=>{
+  for(const status of [403,429,500,502,503,504]){
+    const requests:string[]=[];
+    const f=fixture(fallbackFetcher(()=>new Response('API rate limit exceeded',{status,headers:{'x-ratelimit-remaining':'0'}}),{},requests));
+    const info=await f.service.check();
+    assert.equal(info.source,'github');assert.equal(info.available,true);assert.equal(info.version,'0.6.2');assert.equal(info.releaseUrl,`https://github.com/${RELEASE_REPOSITORY}/releases/tag/v0.6.2`);
+    assert.deepEqual(requests,[DEFAULT_UPDATE_FEED,latestManifestURL,manifestURL,'https://release-assets.githubusercontent.com/synthetic-manifest',checksumURL]);
+    assert.deepEqual(f.events,[]);
+    const prepared=await f.service.prepare();assert.deepEqual(readFileSync(prepared.filePath),bytes);assert.deepEqual(f.events,['before-program-update']);
+  }
+});
+
+test('GitHub API connection and timeout errors can use the published asset channel',async()=>{
+  for(const error of [new TypeError('fetch failed'),new DOMException('timeout','TimeoutError')]){
+    const f=fixture(fallbackFetcher(()=>{throw error;}));assert.equal((await f.service.check()).available,true);assert.deepEqual(f.events,[]);
+  }
+});
+
+test('fallback pins the repository, stable tag, release manifest version and package locations',async()=>{
+  const cases=[
+    {latestLocation:'https://example.com/release.json'},
+    {latestLocation:manifestURL.replace(RELEASE_REPOSITORY,'other/project')},
+    {latestLocation:manifestURL.replace('v0.6.2','v0.6.2-beta')},
+    {latestLocation:manifestURL+'?draft=1'},
+    {latestLocation:'https://release-assets.githubusercontent.com/no-stable-tag'},
+    {manifest:{version:'0.7.0'}},
+    {manifest:{downloads:{'win32-x64':{url:assetURL.replace('v0.6.2','v0.7.0'),sha256:hash(bytes),size:bytes.length}}}},
+    {manifest:{downloads:{'win32-x64':{url:assetURL.replace(packageName,'nested/'+packageName),sha256:hash(bytes),size:bytes.length}}}},
+  ];
+  for(const patch of cases){
+    const f=fixture(fallbackFetcher(()=>new Response('',{status:403}),patch));
+    await assert.rejects(f.service.check(),/官方发布通道读取失败/);await assert.rejects(f.service.prepare(),/先检查/);assert.deepEqual(f.events,[]);
+  }
+});
+
+test('fallback checksum mismatches, absent package sizes and oversized metadata cannot prepare an update',async()=>{
+  const cases=[
+    {checksums:'0'.repeat(64)+'  '+packageName+'\n'},
+    {checksums:checksumText+checksumText},
+    {checksums:''},
+    {checksums:'0'.repeat(300000)},
+    {checksumStatus:404},
+    {manifest:{downloads:{'win32-x64':{url:assetURL,sha256:hash(bytes)}}}},
+    {manifest:{downloads:{'win32-x64':{url:assetURL,sha256:'bad',size:bytes.length}}}},
+    {manifest:{notes:'x'.repeat(300000)}},
+  ];
+  for(const patch of cases){const f=fixture(fallbackFetcher(()=>new Response('',{status:403}),patch));await assert.rejects(f.service.check(),/官方发布通道读取失败/);assert.deepEqual(f.events,[]);assert.deepEqual(readdirSync(f.directory),[]);}
+});
+
+test('permanent API errors, invalid release metadata and custom feed errors do not use fallback',async()=>{
+  for(const status of [401,404,422]){
+    const requests:string[]=[];const f=fixture(fallbackFetcher(()=>new Response('',{status}),{},requests));
+    if(status===404)assert.equal((await f.service.check()).status,'unpublished');else await assert.rejects(f.service.check(),new RegExp(String(status)));
+    assert.deepEqual(requests,[DEFAULT_UPDATE_FEED]);
+  }
+  for(const patch of [{draft:true},{prerelease:true}]){
+    const requests:string[]=[];const f=fixture(fallbackFetcher(()=>Response.json(release(patch)),{},requests));
+    await assert.rejects(f.service.check(),/发布信息无效/);assert.deepEqual(requests,[DEFAULT_UPDATE_FEED]);
+  }
+  const requests:string[]=[];const custom=fixture(fetcher(async url=>{requests.push(url);return new Response('',{status:403});}));
+  await assert.rejects(custom.service.check('https://example.com/release.json'),/HTTP 403/);assert.deepEqual(requests,['https://example.com/release.json']);
+});
+
+test('a stale fallback response cannot replace a newer checked custom feed',async()=>{
+  let resolveAPI!:(response:Response)=>void;const pendingAPI=new Promise<Response>(resolve=>{resolveAPI=resolve;});
+  const fallback=fallbackFetcher(()=>new Response('',{status:403}));
+  const f=fixture(fetcher(async(url,init)=>url===DEFAULT_UPDATE_FEED?pendingAPI:url==='https://example.com/new.json'?Response.json(manifest()):fallback(url,init)));
+  const first=f.service.check();await f.service.check('https://example.com/new.json');resolveAPI(new Response('',{status:403}));
+  await assert.rejects(first,/来源已变化/);assert.equal((await f.service.prepare()).version,'0.6.2');
 });
 
 test('unpublished, draft, prerelease and missing platform states cannot prepare an update',async()=>{

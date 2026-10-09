@@ -30,11 +30,14 @@ const updateBase=`https://github.com/${RELEASE_REPOSITORY}/releases/download/v${
 const updateName=`guanaitong-hub-${updateVersion}-${process.arch}.${process.platform==='win32'?'exe':'zip'}`;
 const updateManifest={format:'guanaitong-release',schemaVersion:1,version:updateVersion,notes:'合成更新说明',publishedAt:'2026-10-08T00:00:00.000Z',databaseVersion:DATABASE_VERSION,downloads:{[process.platform+'-'+process.arch]:{url:updateBase+updateName,sha256:updateHash,size:updateBytes.length}}};
 const originalFetch=globalThis.fetch;
+const updateRequests:string[]=[];
 globalThis.fetch=(async(input,options)=>{
   const url=String(input);
-  if(url===DEFAULT_UPDATE_FEED)return Response.json({tag_name:'v'+updateVersion,draft:false,prerelease:false,published_at:'2026-10-08T00:00:00.000Z',assets:[{name:'release.json',state:'uploaded',browser_download_url:updateBase+'release.json'},{name:updateName,state:'uploaded',browser_download_url:updateBase+updateName,size:updateBytes.length,digest:'sha256:'+updateHash}]});
-  if(url===updateBase+'release.json')return Response.json(updateManifest);
-  if(url===updateBase+updateName)return new Response(updateBytes);
+  if(url===DEFAULT_UPDATE_FEED){updateRequests.push(url);return new Response('Synthetic API rate limit exceeded',{status:403,headers:{'x-ratelimit-remaining':'0'}});}
+  if(url===`https://github.com/${RELEASE_REPOSITORY}/releases/latest/download/release.json`){updateRequests.push(url);return new Response('',{status:302,headers:{Location:updateBase+'release.json'}});}
+  if(url===updateBase+'release.json'){updateRequests.push(url);return Response.json(updateManifest);}
+  if(url===updateBase+'SHA256SUMS.txt'){updateRequests.push(url);return new Response(updateHash+'  '+updateName+'\n');}
+  if(url===updateBase+updateName){updateRequests.push(url);return new Response(updateBytes);}
   return originalFetch(input,options);
 }) as typeof fetch;
 
@@ -206,6 +209,7 @@ app.on('browser-window-created', (_event, window) => {
         if(process.env.HUB_DESKTOP_TEST_LEGACY!=='1'){
           const update=await window.webContents.executeJavaScript('window.hub.checkUpdates()');
           assert.equal(update.source,'github');assert.equal(update.available,true);
+          assert.deepEqual(updateRequests,[DEFAULT_UPDATE_FEED,`https://github.com/${RELEASE_REPOSITORY}/releases/latest/download/release.json`,updateBase+'release.json',updateBase+'SHA256SUMS.txt']);
           const prepared=await window.webContents.executeJavaScript('window.hub.prepareUpdate()');
           assert.deepEqual(readFileSync(prepared.filePath),updateBytes);assert.ok(existsSync(prepared.backupPath));
           const opened:string[]=[];shell.openPath=async path=>{opened.push(path);return'synthetic-stop-before-launch';};
