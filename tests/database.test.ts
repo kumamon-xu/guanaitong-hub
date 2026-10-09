@@ -17,6 +17,7 @@ import { DATABASE_VERSION } from '../electron/database-migrations';
 import { DEFAULT_PRODUCT_QUERY,DEFAULT_ORDER_QUERY,type SyncTask } from '../src/shared/operations';
 import { queryProductsInMemory,queryOrdersInMemory } from '../src/shared/queries';
 import type { Product } from '../src/shared/types';
+import type { TradeAttempt } from '../src/shared/trade';
 
 const directories: string[] = [];
 const databases: SqliteRepository[] = [];
@@ -180,7 +181,7 @@ test('unified password backup previews without writes, migrates between OS keys 
   const source = open(), id = seed(source.store); source.addresses.save(draft);
   await source.sessions.save(id, async () => cookies());
   const backup = source.backups.export('portable-password');
-  assert.equal(JSON.parse(backup).version, 3); assertNoSecrets(Buffer.from(backup));
+  assert.equal(JSON.parse(backup).version, 4); assertNoSecrets(Buffer.from(backup));
   const destination = open(); const previousId = seed(destination.store);
   await destination.sessions.save(previousId, async () => cookies('obsolete'));
   destination.addresses.save({ ...draft, recipient: '旧收件人' });
@@ -242,10 +243,10 @@ test('invalid address inside an otherwise valid unified envelope is rejected bef
   const backup = JSON.parse(f.backups.export('portable-password'));
   const key = scryptSync('portable-password', Buffer.from(backup.salt, 'base64'), 32, { N: 16384, r: 8, p: 1 });
   const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(backup.iv, 'base64'));
-  decipher.setAAD(Buffer.from('guanaitong-hub-backup:3')); decipher.setAuthTag(Buffer.from(backup.tag, 'base64'));
+  decipher.setAAD(Buffer.from(`guanaitong-hub-backup:${backup.version}`)); decipher.setAuthTag(Buffer.from(backup.tag, 'base64'));
   const data = JSON.parse(Buffer.concat([decipher.update(Buffer.from(backup.data, 'base64')), decipher.final()]).toString());
   data.addresses[0].phone = 'invalid';
-  const cipher = createCipheriv('aes-256-gcm', key, Buffer.from(backup.iv, 'base64')); cipher.setAAD(Buffer.from('guanaitong-hub-backup:3'));
+  const cipher = createCipheriv('aes-256-gcm', key, Buffer.from(backup.iv, 'base64')); cipher.setAAD(Buffer.from(`guanaitong-hub-backup:${backup.version}`));
   backup.data = Buffer.concat([cipher.update(JSON.stringify(data)), cipher.final()]).toString('base64'); backup.tag = cipher.getAuthTag().toString('base64'); key.fill(0);
   const before = f.store.getState(), addresses = f.addresses.list();
   assert.throws(() => f.backups.prepare(JSON.stringify(backup), 'portable-password'), /手机号/);
@@ -253,7 +254,7 @@ test('invalid address inside an otherwise valid unified envelope is rejected bef
 });
 test('schema v1 upgrades with a restorable safety copy and preserves existing cards', () => {
   const f = open(); seed(f.store); const before = f.store.getState(); f.db.close();
-  inspect(f.db.filePath, raw => raw.exec('DROP TABLE sessions; DROP TABLE price_history; DROP TABLE sync_tasks; DROP INDEX products_favorite; DROP INDEX cart_card; DELETE FROM schema_migrations WHERE version>1; PRAGMA user_version=1;'));
+  inspect(f.db.filePath, raw => raw.exec('DROP TABLE trade_attempts; DROP TABLE sessions; DROP TABLE price_history; DROP TABLE sync_tasks; DROP INDEX products_favorite; DROP INDEX cart_card; DELETE FROM schema_migrations WHERE version>1; PRAGMA user_version=1;'));
   const next = open(f.config); assert.deepEqual(next.store.getState(), before);
   const name = readdirSync(join(f.config.directory, 'backups')).find(name => name.startsWith(`before-schema-v1-to-v${DATABASE_VERSION}-`))!;
   inspect(join(f.config.directory, 'backups', name), raw => assert.equal(raw.prepare('PRAGMA user_version').get()!.user_version, 1));
@@ -261,7 +262,7 @@ test('schema v1 upgrades with a restorable safety copy and preserves existing ca
 
 test('failed schema upgrade leaves version and old records unchanged and succeeds on retry', () => {
   const f = open(); seed(f.store); const before = f.store.getState(); f.db.close();
-  inspect(f.db.filePath, raw => raw.exec('DELETE FROM schema_migrations WHERE version>1; DROP TABLE price_history; DROP TABLE sync_tasks; DROP INDEX products_favorite; DROP INDEX cart_card; PRAGMA user_version=1;'));
+  inspect(f.db.filePath, raw => raw.exec('DROP TABLE trade_attempts; DELETE FROM schema_migrations WHERE version>1; DROP TABLE price_history; DROP TABLE sync_tasks; DROP INDEX products_favorite; DROP INDEX cart_card; PRAGMA user_version=1;'));
   assert.throws(() => openStorage(f.config), /already exists/);
   inspect(f.db.filePath, raw => {
     assert.equal(raw.prepare('PRAGMA user_version').get()!.user_version, 1);
@@ -424,7 +425,63 @@ test('persisted active sync batches recover as interrupted and survive unified b
 
 test('schema v2 upgrades to management tables with a safety copy and retains query behavior', () => {
   const f=open();seed(f.store);const before=f.store.getState();f.db.close();
-  inspect(f.db.filePath,raw=>raw.exec('DROP TABLE price_history; DROP TABLE sync_tasks; DROP INDEX products_favorite; DROP INDEX cart_card; DELETE FROM schema_migrations WHERE version=3; PRAGMA user_version=2;'));
+  inspect(f.db.filePath,raw=>raw.exec('DROP TABLE trade_attempts; DROP TABLE price_history; DROP TABLE sync_tasks; DROP INDEX products_favorite; DROP INDEX cart_card; DELETE FROM schema_migrations WHERE version>=3; PRAGMA user_version=2;'));
   const next=open(f.config);assert.deepEqual(next.store.getState(),before);assert.equal(next.db.queryProducts(DEFAULT_PRODUCT_QUERY).total,1);
-  assert.ok(readdirSync(join(f.config.directory,'backups')).some(name=>name.startsWith('before-schema-v2-to-v3-')));
+  assert.ok(readdirSync(join(f.config.directory,'backups')).some(name=>name.startsWith(`before-schema-v2-to-v${DATABASE_VERSION}-`)));
+});
+
+const tradeAttempt=(cardId:string):TradeAttempt=>({id:'fixture-trade-attempt',cardId,cardKey:'a'.repeat(64),fingerprint:'b'.repeat(64),previewDigest:'c'.repeat(64),status:'unknown',startedAt:'2026-10-09T00:00:00Z',updatedAt:'2026-10-09T00:00:01Z',deduction:12,balanceUnit:'额度',lines:[{productCode:'private-trade-product',skuCode:'private-trade-sku',inventoryId:'private-pool',name:'私密测试商品',specification:'规格',quantity:1,price:12}],orderCode:'private-trade-order',sellerOrderCode:null,message:'结果待核对',baselineOrders:[]});
+
+test('schema v3 migrates transactionally to encrypted trade records and preserves the old vault',()=>{
+  const f=open(),id=seed(f.store),before=f.store.getState();f.db.close();
+  inspect(f.db.filePath,db=>db.exec('DROP TABLE trade_attempts; DELETE FROM schema_migrations WHERE version=4; PRAGMA user_version=3;'));
+  const next=open(f.config);assert.deepEqual(next.store.getState(),before);assert.deepEqual(next.db.tradeAttempts(),[]);
+  const backup=readdirSync(join(f.config.directory,'backups')).find(name=>name.startsWith('before-schema-v3-to-v4-'))!;
+  inspect(join(f.config.directory,'backups',backup),db=>{assert.equal(db.prepare('PRAGMA user_version').get()!.user_version,3);assert.equal(db.prepare('SELECT COUNT(*) AS n FROM cards').get()!.n,1);});
+  next.db.saveTradeAttempt(tradeAttempt(id));
+  for(const file of [next.db.filePath,next.db.filePath+'-wal'])if(readFileSync(file).length)for(const text of ['private-trade-order','private-trade-sku','私密测试商品'])assert.equal(readFileSync(file).includes(Buffer.from(text)),false);
+});
+test('trade records survive backup transfer, old-card restore and encryption failures without losing uncertain intents',()=>{
+  const f=open(),id=seed(f.store),management=f.db.managementData();delete management.tradeAttempts;
+  const legacy=f.store.exportBackup('portable-password',f.addresses.list(),management);assert.equal(JSON.parse(legacy).version,3);
+  f.db.saveTradeAttempt(tradeAttempt(id));
+  const backup=f.backups.export('portable-password');assert.equal(JSON.parse(backup).version,4);
+  const destination=open();destination.backups.apply(destination.backups.prepare(backup,'portable-password'));assert.deepEqual(destination.db.tradeAttempts(),[tradeAttempt(id)]);
+  destination.backups.apply(destination.backups.prepare(legacy,'portable-password'));assert.deepEqual(destination.db.tradeAttempts(),[tradeAttempt(id)],'restoring a stale backup cannot delete an uncertain order');
+  const before=destination.db.tradeAttempts();
+  const brokenConfig={...destination.config,encryptString:()=>{throw new Error('synthetic keychain failure');}};
+  const broken=new SqliteRepository(brokenConfig);databases.push(broken);assert.throws(()=>broken.saveTradeAttempt({...tradeAttempt(id),message:'cannot persist'}),/keychain failure/);assert.deepEqual(destination.db.tradeAttempts(),before);
+});
+test('unreleased v4 migration failure restores v3 and a retry can complete',()=>{
+  const f=open();seed(f.store);const before=f.store.getState();f.db.close();
+  inspect(f.db.filePath,db=>db.exec('DROP TABLE trade_attempts; DELETE FROM schema_migrations WHERE version=4; PRAGMA user_version=3; CREATE TABLE trade_attempts (id TEXT PRIMARY KEY);'));
+  assert.throws(()=>openStorage(f.config),/already exists/);
+  inspect(f.db.filePath,db=>{assert.equal(db.prepare('PRAGMA user_version').get()!.user_version,3);assert.equal(db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get()!.n,3);db.exec('DROP TABLE trade_attempts');});
+  assert.deepEqual(open(f.config).store.getState(),before);
+});
+
+test('restoring a newer backup adds order references to an earlier uncertain attempt without trusting backup success',()=>{
+  const f=open(),id=seed(f.store),initial={...tradeAttempt(id),status:'submitting' as const,orderCode:null,sellerOrderCode:null};
+  f.db.saveTradeAttempt(initial);const early=f.backups.export('portable-password');
+  const final={...initial,status:'succeeded' as const,orderCode:'confirmed-fixture-order',sellerOrderCode:'confirmed-fixture-seller',updatedAt:'2026-10-09T00:00:02Z'};
+  f.db.saveTradeAttempt(final);const recent=f.backups.export('portable-password');
+  const destination=open();destination.backups.apply(destination.backups.prepare(early,'portable-password'));
+  const recovered=destination.db.tradeAttempts()[0];assert.equal(recovered.status,'unknown');assert.equal(recovered.orderCode,null);
+  assert.ok(Date.parse(recovered.updatedAt)>Date.parse(final.updatedAt),'recovery timestamps must not suppress newer order evidence');
+  destination.backups.apply(destination.backups.prepare(recent,'portable-password'));
+  const merged=destination.db.tradeAttempts()[0];assert.equal(merged.orderCode,final.orderCode);assert.equal(merged.sellerOrderCode,final.sellerOrderCode);assert.equal(merged.status,'submitted','a server query must confirm the imported result');
+  destination.backups.apply(destination.backups.prepare(early,'portable-password'));
+  assert.equal(destination.db.tradeAttempts()[0].orderCode,final.orderCode,'old backups cannot erase the new reference');
+});
+
+test('conflicting transaction identity or order evidence rejects restoration without replacing current domains',()=>{
+  for(const patch of [{cardKey:'d'.repeat(64)},{fingerprint:'e'.repeat(64)},{orderCode:'conflicting-fixture-order'},{sellerOrderCode:'conflicting-fixture-seller'}]){
+    const source=open(),id=seed(source.store),original={...tradeAttempt(id),sellerOrderCode:'original-fixture-seller'};
+    source.db.saveTradeAttempt(original);const destination=open();destination.backups.apply(destination.backups.prepare(source.backups.export('portable-password'),'portable-password'));
+    const state=destination.store.getState(),book=destination.addresses.list(),records=destination.db.tradeAttempts();
+    source.db.saveTradeAttempt({...original,...patch});
+    const conflict=destination.backups.prepare(source.backups.export('portable-password'),'portable-password');
+    assert.throws(()=>destination.backups.apply(conflict),/冲突/);
+    assert.deepEqual(destination.store.getState(),state);assert.deepEqual(destination.addresses.list(),book);assert.deepEqual(destination.db.tradeAttempts(),records);
+  }
 });

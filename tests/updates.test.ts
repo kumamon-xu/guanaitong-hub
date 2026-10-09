@@ -5,6 +5,7 @@ import { join,resolve,sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach,test } from 'node:test';
 import { ReleaseService } from '../electron/release-service';
+import { DATABASE_VERSION } from '../electron/database-migrations';
 import { DEFAULT_UPDATE_FEED,RELEASE_REPOSITORY } from '../src/shared/release-config';
 import type { SqliteRepository } from '../electron/sqlite-repository';
 import type { PreparedUpdate,UpdateProgress } from '../src/shared/operations';
@@ -15,7 +16,7 @@ const hash=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
 const bytes=Buffer.from('synthetic update package; never executable');
 const manifestURL=`https://github.com/${RELEASE_REPOSITORY}/releases/download/v0.6.2/release.json`;
 const assetURL=`https://github.com/${RELEASE_REPOSITORY}/releases/download/v0.6.2/guanaitong-hub-0.6.2-x64-setup.exe`;
-const manifest=(patch:object={})=>({format:'guanaitong-release',schemaVersion:1,version:'0.6.2',publishedAt:'2026-10-08T00:00:00.000Z',notes:'合成更新说明',databaseVersion:3,downloads:{'win32-x64':{url:assetURL,sha256:hash(bytes),size:bytes.length}},...patch});
+const manifest=(patch:object={})=>({format:'guanaitong-release',schemaVersion:1,version:'0.6.2',publishedAt:'2026-10-08T00:00:00.000Z',notes:'合成更新说明',databaseVersion:DATABASE_VERSION,downloads:{'win32-x64':{url:assetURL,sha256:hash(bytes),size:bytes.length}},...patch});
 const release=(patch:object={})=>({tag_name:'v0.6.2',draft:false,prerelease:false,published_at:'2026-10-08T00:00:00.000Z',assets:[{name:'release.json',state:'uploaded',browser_download_url:manifestURL},{name:'guanaitong-hub-0.6.2-x64-setup.exe',state:'uploaded',browser_download_url:assetURL,size:bytes.length,digest:'sha256:'+hash(bytes)}],...patch});
 function fixture(fetcher:typeof fetch){
   const directory=mkdtempSync(join(tmpdir(),'gat-updates-'));directories.push(directory);const events:string[]=[],progress:UpdateProgress[]=[];

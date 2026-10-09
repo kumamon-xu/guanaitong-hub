@@ -23,6 +23,8 @@ import { ReleaseService } from './release-service';
 import { exportOrderCSV } from './order-export';
 import type { SyncTask, OrderQuery } from '../src/shared/operations';
 import { version as applicationVersion } from '../package.json';
+import { createTradeTransport } from './trade-client';
+import { TradeService } from './trade-service';
 
 // Keep the same vault and OS keychain identity in development and packaged builds.
 app.setName('guanaitong-hub');
@@ -36,6 +38,7 @@ let database:SqliteRepository;
 let backupService:BackupService;
 let syncManager:SyncManager;
 let releaseService:ReleaseService;
+let tradeService:TradeService;
 let revision=0;
 let restoring = false;
 let upgrading = false;
@@ -285,6 +288,12 @@ function registerIPC() {
   const mutate=(fn:()=>AppState)=>database.enqueueWrite(()=>{fn();notify();return store.getViewState();});
   const remote=(fn:(...args:any[])=>Promise<any>)=>async(...args:any[])=>{remoteOperations++;try{return await fn(...args);}finally{remoteOperations--;}};
   handle('state',()=>store.getState());
+  handle('trade-context',remote((cardId,items)=>tradeService.context(cardId,items)));
+  handle('trade-preview',remote(input=>tradeService.preview(input)));
+  handle('trade-submit',remote(input=>tradeService.submit(input)));
+  handle('trade-attempts',()=>tradeService.attempts());
+  handle('trade-query',remote(id=>tradeService.query(id)));
+  handle('trade-agreement',async(id,index)=>shell.openExternal(tradeService.agreementURL(id,index)));
   handle('view-state',()=>store.getViewState());
   handle('query-products',query=>database.queryProducts(query));
   handle('product',id=>store.getProduct(id));
@@ -424,6 +433,7 @@ async function applyRestore(prepared:PreparedRestore):Promise<void>{
     await sessionVault.flush();
     await database.enqueueWrite(()=>backupService.apply(prepared));
     if(prepared.data){
+      tradeService.invalidatePreviews();
       sessionEpoch++;
       syncManager=new SyncManager({concurrency:()=>store.getViewState().settings.syncConcurrency??2,persist:task=>{void database.enqueueWrite(()=>database.saveSyncTask(task)).catch(()=>{});},changed:notifyTasks,initial:database.recoverInterruptedTasks()});
       notifyTasks(syncManager.list());
@@ -470,6 +480,12 @@ app.whenReady().then(async()=>{
     backupService=new BackupService(database,store,addressVault);
     const taskOptions={concurrency:()=>store.getViewState().settings.syncConcurrency??2,persist:(task:SyncTask)=>{const clean={...task,message:redactText(task.message,store.getViewState().cards.map(card=>card.number))};void database.enqueueWrite(()=>database.saveSyncTask(clean)).catch(()=>{});},changed:notifyTasks};
     syncManager=new SyncManager({...taskOptions,initial:database.recoverInterruptedTasks()});
+    const previewOnly=process.env.HUB_TRADE_PREVIEW_ONLY==='1';
+    tradeService=new TradeService({store,previewOnly,transport:createTradeTransport(async id=>(await cardSession(id)).fetch.bind(await cardSession(id)) as typeof fetch,previewOnly),
+      ensureLoggedIn,ledger:{list:()=>database.tradeAttempts(),put:value=>database.enqueueWrite(()=>database.saveTradeAttempt(value))},
+      updated:async id=>{await syncCard(id);notify();},
+    });
+    await tradeService.recover();
     releaseService=new ReleaseService(applicationVersion,process.platform,process.arch,fetch,database,url=>shell.openExternal(url),{
       directory:join(app.getPath('userData'),'updates'),openPath:path=>shell.openPath(path),
       progress:value=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('hub:update-progress',value);},

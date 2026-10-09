@@ -1,10 +1,15 @@
 import { validateProductQuery, validateOrderQuery } from '../src/shared/queries';
 import type { ProductQuery, OrderQuery } from '../src/shared/operations';
+import { validateTradePreview,validateTradeReferences,validateTradeSubmit } from '../src/shared/trade';
 
 function string(value:unknown,optional=false,max=200):void{if(optional&&value===undefined)return;if(typeof value!=='string'||!value.trim()||value.length>max)throw new Error('操作参数无效');}
 function object(value:unknown):asserts value is Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value)||Object.getPrototypeOf(value)!==Object.prototype)throw new Error('操作参数须为对象');}
 function integer(value:unknown,min:number,max:number):void{if(typeof value!=='number'||!Number.isInteger(value)||value<min||value>max)throw new Error('操作数量无效');}
 export function validateIPC(name:string,args:unknown[]):void{
+  if(name==='trade-context'){if(args.length!==2)throw new Error('IPC 参数数量无效');validateTradeReferences(args[0],args[1]);return;}
+  if(name==='trade-preview'||name==='trade-submit'){if(args.length!==1)throw new Error('IPC 参数数量无效');object(args[0]);if(name==='trade-preview')validateTradePreview(args[0]);else validateTradeSubmit(args[0]);return;}
+  if(name==='trade-attempts'){if(args.length)throw new Error('IPC 参数数量无效');return;}
+  if(name==='trade-query'||name==='trade-agreement'){if(args.length!==(name==='trade-query'?1:2))throw new Error('IPC 参数数量无效');string(args[0]);if(name==='trade-agreement')integer(args[1],0,9);return;}
   if(['prepare-update','cancel-update','install-update'].includes(name)){if(args.length)throw new Error('IPC 参数数量无效');return;}
   const counts:Record<string,[number,number]>={state:[0,0],'view-state':[0,0],addresses:[0,0],diagnostics:[0,0],'data-folder':[0,0],'query-products':[1,1],product:[1,1],'query-orders':[1,1],'export-orders':[1,1],'sync-tasks':[0,0],'cancel-sync':[0,1],'retry-sync':[0,0],'price-history':[2,2],'check-updates':[0,0],'open-update':[0,0],'save-address':[1,2],'default-address':[1,1],'remove-address':[1,1],'export-addresses':[1,1],'import-addresses':[1,1],'address-regions':[0,1],'official-addresses':[1,1],'publish-address':[3,3],'add-cards':[1,1],'update-card':[2,2],settings:[1,1],favorite:[1,1],merge:[1,1],'add-cart':[3,4],'update-cart':[2,2],'open-card':[1,2],'open-product':[2,3],'sync-card':[1,1],checkout:[1,1],'sync-all':[0,0],export:[1,1],import:[1,1]};
   const count=counts[name];if(!count||args.length<count[0]||args.length>count[1])throw new Error('IPC 参数数量无效');

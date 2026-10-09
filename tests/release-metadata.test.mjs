@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join,resolve,sep } from 'node:path';
 import { afterEach,test } from 'node:test';
 import { artifactManifest,mergeManifests,versionNotes,signingEnvironment } from '../scripts/release-metadata.mjs';
+import { DATABASE_VERSION } from '../electron/database-migrations.ts';
 
 const folders=[];afterEach(()=>{for(const folder of folders.splice(0)){const path=resolve(folder);assert.ok(path.startsWith(resolve(tmpdir())+sep)&&path.split(sep).at(-1).startsWith('gat-release-metadata-'));rmSync(path,{recursive:true,force:true});}});
 function manifest(platform,arch,patch={}){
@@ -20,7 +21,7 @@ test('empty CI signing secrets are absent and unsigned builds never use supplied
   assert.deepEqual(signingEnvironment(original,false),{KEEP:'yes',CSC_IDENTITY_AUTO_DISCOVERY:'false'});assert.equal(original.CSC_LINK,'fixture-certificate');assert.equal(signingEnvironment(original,true).WIN_CSC_LINK,original.WIN_CSC_LINK);
 });
 test('multi-platform manifests use explicit architecture and merge all three installers',()=>{
-  const parts=[manifest('win32','x64'),manifest('darwin','arm64'),manifest('darwin','x64')],merged=mergeManifests(parts);assert.deepEqual(Object.keys(merged.downloads).sort(),['darwin-arm64','darwin-x64','win32-x64']);assert.equal(merged.databaseVersion,3);for(const asset of Object.values(merged.downloads)){assert.equal(asset.size,23);assert.match(asset.sha256,/^[0-9a-f]{64}$/);}
+  const parts=[manifest('win32','x64'),manifest('darwin','arm64'),manifest('darwin','x64')],merged=mergeManifests(parts);assert.deepEqual(Object.keys(merged.downloads).sort(),['darwin-arm64','darwin-x64','win32-x64']);assert.equal(merged.databaseVersion,DATABASE_VERSION);for(const asset of Object.values(merged.downloads)){assert.equal(asset.size,23);assert.match(asset.sha256,/^[0-9a-f]{64}$/);}
 });
 test('release assembly refuses missing, duplicate, mismatched and unsigned-claiming platforms',()=>{
   const windows=manifest('win32','x64'),arm=manifest('darwin','arm64'),intel=manifest('darwin','x64');assert.throws(()=>mergeManifests([windows,arm]),/Missing/);assert.throws(()=>mergeManifests([windows,arm,intel,windows]),/Duplicate/);assert.throws(()=>mergeManifests([windows,arm,{...intel,version:'0.7.0'}]),/differs/);assert.throws(()=>mergeManifests([windows,arm,{...intel,signed:true}]),/differs/);

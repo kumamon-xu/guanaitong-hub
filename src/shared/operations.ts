@@ -1,5 +1,6 @@
 import type { AppState, Product, Order } from './types';
 import type { PriceFilterValue } from './price-filter';
+import type { TradeAttempt } from './trade';
 
 export interface ProductQuery {
   page: number; pageSize: number; cardId: string; search: string; category: string;
@@ -24,7 +25,7 @@ export interface SyncTask {
   endpoint?: string;
 }
 export interface PriceHistory { id: string; cardId: string; sourceId: string; at: string; price: number | null; unit: string; }
-export interface ManagementData { priceHistory: PriceHistory[]; syncTasks: SyncTask[]; }
+export interface ManagementData { priceHistory: PriceHistory[]; syncTasks: SyncTask[]; tradeAttempts?: TradeAttempt[]; }
 export interface UpdateInfo {
   currentVersion: string; version: string; available: boolean; notes: string; url: string; publishedAt: string;
   status?: 'available' | 'current' | 'unpublished' | 'unsupported'; source?: 'github' | 'manifest';

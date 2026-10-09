@@ -57,6 +57,12 @@ export function createDemoAPI(): HubAPI {
   const save = () => { localStorage.setItem(DEMO_KEY, JSON.stringify(state)); const next = structuredClone(state); listeners.forEach(fn => fn(next)); return next; };
   const blocked = async (): Promise<void> => { throw new Error('浏览器演示模式无法操作官网。请在桌面应用中登录和同步真实卡片。'); };
   return {
+    getTradeContext:async()=>{await blocked();throw new Error('演示模式不能获取真实结算');},
+    previewOrder:async()=>{await blocked();throw new Error('演示模式不能获取真实结算');},
+    submitOrder:async()=>{await blocked();throw new Error('演示模式不能提交订单');},
+    getTradeAttempts:async()=>[],
+    queryTradeAttempt:async()=>{await blocked();throw new Error('演示模式不能查询真实兑换');},
+    openTradeAgreement:blocked,
     getAddresses: async () => structuredClone(addresses),
     saveAddress: async (draft,id) => {
       if (!/^1[3-9]\d{9}$/.test(draft.phone) || !draft.recipient.trim() || !draft.province || !draft.city || !draft.district || !draft.detail.trim()) throw new Error('请填写完整的演示收货地址');

@@ -504,7 +504,7 @@ export class HubStore {
     const salt = randomBytes(16);
     const iv = randomBytes(12);
     const key = scryptSync(passphrase, salt, 32, { N: 16384, r: 8, p: 1 });
-    const version = management === undefined ? addresses === undefined ? 1 : 2 : 3;
+    const version = management === undefined ? addresses === undefined ? 1 : 2 : management.tradeAttempts===undefined?3:4;
     try {
       const cipher = createCipheriv('aes-256-gcm', key, iv);
       cipher.setAAD(Buffer.from(`guanaitong-hub-backup:${version}`));
@@ -520,7 +520,7 @@ export class HubStore {
     if (typeof passphrase !== 'string' || passphrase.length < 8 || passphrase.length > 1024) fail('备份口令须为 8 至 1024 个字符');
     let backup: { format: string; version: number; kdf: string; cipher: string; salt: string; iv: string; tag: string; data: string };
     try { backup = JSON.parse(contents); } catch { fail('备份文件不是有效 JSON'); }
-    if (!backup! || backup!.format !== 'guanaitong-hub-backup' || ![1, 2, 3].includes(backup!.version) || backup!.kdf !== 'scrypt' || backup!.cipher !== 'aes-256-gcm') fail('备份格式或版本不受支持');
+    if (!backup! || backup!.format !== 'guanaitong-hub-backup' || ![1, 2, 3, 4].includes(backup!.version) || backup!.kdf !== 'scrypt' || backup!.cipher !== 'aes-256-gcm') fail('备份格式或版本不受支持');
     for (const field of ['salt', 'iv', 'tag', 'data'] as const) if (typeof backup![field] !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(backup![field])) fail('备份加密数据格式无效');
     for (const field of ['salt', 'iv', 'tag', 'data'] as const) if (Buffer.from(backup![field], 'base64').toString('base64') !== backup![field]) fail('备份加密数据格式无效');
     const salt = Buffer.from(backup!.salt, 'base64');

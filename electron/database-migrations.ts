@@ -69,5 +69,14 @@ export const DATABASE_MIGRATIONS = [
     CREATE INDEX products_favorite ON products(favorite, position);
     CREATE INDEX cart_card ON cart(card_id);
   ` },
+  { version: 4, name: 'direct-card-trades', sql: `
+    -- Independent audit records survive card-backup restoration, including uncertain writes.
+    CREATE TABLE trade_attempts (
+      id TEXT PRIMARY KEY,
+      state TEXT NOT NULL CHECK(state IN ('submitting','submitted','succeeded','rejected','unknown','closed','partial')),
+      at TEXT NOT NULL, payload BLOB NOT NULL
+    ) STRICT;
+    CREATE INDEX trade_attempts_time ON trade_attempts(at DESC);
+  ` },
 ] as const;
 export const DATABASE_VERSION = DATABASE_MIGRATIONS.at(-1)!.version;

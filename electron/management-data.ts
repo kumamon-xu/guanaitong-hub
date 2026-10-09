@@ -1,4 +1,5 @@
 import type { ManagementData, PriceHistory, SyncTask } from '../src/shared/operations';
+import { validateTradeAttempts } from './trade-records';
 
 export function validateManagement(value:unknown,cards:Set<string>):ManagementData{
   const data=value as ManagementData;
@@ -19,5 +20,5 @@ export function validateManagement(value:unknown,cards:Set<string>):ManagementDa
     if(item.endpoint!==undefined)text(item.endpoint);
     return {id:item.id,batchId:item.batchId,cardId:item.cardId,status:item.status,phase:item.phase,page:item.page,completed:item.completed,total:item.total,message:item.message,errorKind:item.errorKind,startedAt:item.startedAt,finishedAt:item.finishedAt,...(item.endpoint?{endpoint:item.endpoint}:{})} satisfies SyncTask;
   });
-  return {priceHistory,syncTasks};
+  return {priceHistory,syncTasks,...(data.tradeAttempts!==undefined?{tradeAttempts:validateTradeAttempts(data.tradeAttempts)}:{})};
 }

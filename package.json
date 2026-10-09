@@ -1,6 +1,6 @@
 {
   "name": "guanaitong-hub",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "关爱通卡片与兑换管理，本地桌面应用",
   "private": true,
   "type": "module",
@@ -12,6 +12,7 @@
     "test": "tsx --test tests/*.test.ts tests/*.test.mjs",
     "test:login-browser": "node scripts/check-hidden-login.mjs",
     "test:desktop": "npm run build && node scripts/check-desktop.mjs",
+    "test:trade-preview": "npm run build && node scripts/check-trade-preview.mjs",
     "package": "npm run build && electron-builder --dir --publish never",
     "package:win": "npm run build && electron-builder --win nsis --x64 --publish never",
     "package:mac": "npm run build && electron-builder --mac dir --publish never",

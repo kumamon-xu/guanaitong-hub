@@ -12,6 +12,7 @@ import { version } from '../package.json';
 import { DEFAULT_PRODUCT_QUERY,DEFAULT_ORDER_QUERY,type SyncTask } from '../src/shared/operations';
 import { BackupService } from '../electron/backup-service';
 import { DEFAULT_UPDATE_FEED,RELEASE_REPOSITORY } from '../src/shared/release-config';
+import { DATABASE_VERSION } from '../electron/database-migrations';
 
 const root = process.env.HUB_DESKTOP_TEST_ROOT!;
 const phase = process.env.HUB_DESKTOP_TEST_PHASE!;
@@ -27,7 +28,7 @@ const updateBytes=Buffer.from('synthetic package; never execute'),updateHash=cre
 const [major,minor,patch]=version.split('.').map(Number),updateVersion=`${major}.${minor}.${patch+1}`;
 const updateBase=`https://github.com/${RELEASE_REPOSITORY}/releases/download/v${updateVersion}/`;
 const updateName=`guanaitong-hub-${updateVersion}-${process.arch}.${process.platform==='win32'?'exe':'zip'}`;
-const updateManifest={format:'guanaitong-release',schemaVersion:1,version:updateVersion,notes:'合成更新说明',publishedAt:'2026-10-08T00:00:00.000Z',databaseVersion:3,downloads:{[process.platform+'-'+process.arch]:{url:updateBase+updateName,sha256:updateHash,size:updateBytes.length}}};
+const updateManifest={format:'guanaitong-release',schemaVersion:1,version:updateVersion,notes:'合成更新说明',publishedAt:'2026-10-08T00:00:00.000Z',databaseVersion:DATABASE_VERSION,downloads:{[process.platform+'-'+process.arch]:{url:updateBase+updateName,sha256:updateHash,size:updateBytes.length}}};
 const originalFetch=globalThis.fetch;
 globalThis.fetch=(async(input,options)=>{
   const url=String(input);
@@ -86,7 +87,7 @@ app.on('browser-window-created', (_event, window) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [backupPath] })) as typeof dialog.showOpenDialog;
       if (phase === 'write') {
         assert.equal(await window.webContents.executeJavaScript("window.hub.exportData('desktop-backup-password')"), true);
-        assert.equal(JSON.parse(readFileSync(backupPath, 'utf8')).version, 3);
+        assert.equal(JSON.parse(readFileSync(backupPath, 'utf8')).version, process.env.HUB_DESKTOP_TEST_LEGACY==='1'?3:4);
         const original = (await window.webContents.executeJavaScript('window.hub.getAddresses()'))[0];
         await window.webContents.executeJavaScript(`window.hub.saveAddress(${JSON.stringify({ ...original, recipient: '临时修改' })},${JSON.stringify(original.id)})`);
         dialog.showMessageBox = (async () => ({ response: 0, checkboxChecked: false })) as typeof dialog.showMessageBox;
@@ -143,7 +144,8 @@ app.on('browser-window-created', (_event, window) => {
         const waitFor=async(expression:string)=>{for(let attempt=0;attempt<50;attempt++){if(await window.webContents.executeJavaScript(expression))return;await new Promise(resolve=>setTimeout(resolve,100));}throw new Error(`Desktop condition timed out: ${expression}`);};
         const rich=join(root,'rich-fixture.gathub');
         const addressVault=new AddressVault({...options,repository:database});
-        writeFileSync(rich,new BackupService(database,store,addressVault).export('desktop-backup-password'));
+        const management=database.managementData();if(process.env.HUB_DESKTOP_TEST_LEGACY==='1')delete management.tradeAttempts;
+        writeFileSync(rich,store.exportBackup('desktop-backup-password',addressVault.list(),management));
         dialog.showOpenDialog=(async()=>({canceled:false,filePaths:[rich]})) as typeof dialog.showOpenDialog;
         await window.webContents.executeJavaScript("window.hub.importData('desktop-backup-password')");
         const view=await window.webContents.executeJavaScript('window.hub.getViewState()');

@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm,mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const entryIndex = process.argv.indexOf('--entry');
 const appEntry = resolve(entryIndex >= 0 ? process.argv[entryIndex + 1] : 'dist-electron/main.cjs');
@@ -32,3 +33,4 @@ try {
 } finally {
   await rm(directory, { recursive: true, force: true });
 }
+execFileSync(process.execPath,['scripts/check-trade.mjs','--entry',appEntry],{stdio:'inherit',windowsHide:true});

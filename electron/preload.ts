@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { HubAPI } from '../src/shared/types';
 const api: HubAPI = {
+  getTradeContext:(cardId,items)=>ipcRenderer.invoke('hub:trade-context',cardId,items),
+  previewOrder:input=>ipcRenderer.invoke('hub:trade-preview',input),
+  submitOrder:input=>ipcRenderer.invoke('hub:trade-submit',input),
+  getTradeAttempts:()=>ipcRenderer.invoke('hub:trade-attempts'),
+  queryTradeAttempt:id=>ipcRenderer.invoke('hub:trade-query',id),
+  openTradeAgreement:(id,index)=>ipcRenderer.invoke('hub:trade-agreement',id,index),
   getViewState: () => ipcRenderer.invoke('hub:view-state'),
   queryProducts: query=>ipcRenderer.invoke('hub:query-products',query),
   getProduct:id=>ipcRenderer.invoke('hub:product',id),

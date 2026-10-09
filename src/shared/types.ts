@@ -2,6 +2,7 @@ export type CardStatus = 'pending' | 'active' | 'expired' | 'exhausted' | 'error
 export type { AddressDraft, LocalAddress } from '../../electron/addresses';
 import type { AddressDraft, LocalAddress } from '../../electron/addresses';
 import type { AppSummary, ProductQuery, ProductPage, OrderQuery, OrderPage, SyncTask, PriceHistory, UpdateInfo, PreparedUpdate, UpdateProgress } from './operations';
+import type { TradeAttemptView,TradeContext,TradeReference,TradePreviewInput,TradePreview,TradeSubmitInput } from './trade';
 export interface RegionOption { id: string; name: string; children: RegionOption[] | null; }
 export interface OfficialAddress { id: string; draft: AddressDraft; isDefault: boolean; }
 export interface AddressPublishResult { id: string; created: boolean; }
@@ -36,6 +37,12 @@ export interface AppState {
 export interface AddCardInput { number: string; password: string; label?: string; }
 export interface SyncResult { cardId: string; ok: boolean; message: string; cancelled?: boolean; }
 export interface HubAPI {
+  getTradeContext(cardId:string,items:TradeReference[]):Promise<TradeContext>;
+  previewOrder(input:TradePreviewInput):Promise<TradePreview>;
+  submitOrder(input:TradeSubmitInput):Promise<TradeAttemptView>;
+  getTradeAttempts():Promise<TradeAttemptView[]>;
+  queryTradeAttempt(id:string):Promise<TradeAttemptView>;
+  openTradeAgreement(previewId:string,index:number):Promise<void>;
   getViewState(): Promise<AppState>;
   queryProducts(query: ProductQuery): Promise<ProductPage>;
   getProduct(id: string): Promise<Product>;

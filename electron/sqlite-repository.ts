@@ -10,6 +10,8 @@ import { privateDirectory, regularFile } from './legacy-storage';
 import { DATABASE_MIGRATIONS, DATABASE_VERSION } from './database-migrations';
 import type { ProductQuery, ProductPage, OrderQuery, OrderPage, SyncTask, PriceHistory, ManagementData } from '../src/shared/operations';
 import { sourceCategories, validateProductQuery, validateOrderQuery } from '../src/shared/queries';
+import type { TradeAttempt } from '../src/shared/trade';
+import { mergeRestoredTradeAttempt,validateTradeAttempts } from './trade-records';
 
 export class SqliteRepository implements HubRepository, AddressRepository, SessionRepository {
   readonly filePath: string;
@@ -305,7 +307,12 @@ export class SqliteRepository implements HubRepository, AddressRepository, Sessi
   }
   priceHistory(cardId:string,sourceId:string):PriceHistory[]{return this.db.prepare('SELECT payload FROM price_history WHERE card_id=? AND source_id=? ORDER BY at DESC,rowid DESC LIMIT 100').all(cardId,sourceId).map(row=>this.decrypt<PriceHistory>(row.payload));}
   managementData():ManagementData{
-    return {priceHistory:this.db.prepare('SELECT payload FROM price_history ORDER BY at,rowid').all().map(row=>this.decrypt<PriceHistory>(row.payload)),syncTasks:this.db.prepare('SELECT payload FROM sync_tasks ORDER BY at,rowid').all().map(row=>this.decrypt<SyncTask>(row.payload))};
+    return {priceHistory:this.db.prepare('SELECT payload FROM price_history ORDER BY at,rowid').all().map(row=>this.decrypt<PriceHistory>(row.payload)),syncTasks:this.db.prepare('SELECT payload FROM sync_tasks ORDER BY at,rowid').all().map(row=>this.decrypt<SyncTask>(row.payload)),tradeAttempts:this.tradeAttempts()};
+  }
+  tradeAttempts():TradeAttempt[]{return validateTradeAttempts(this.db.prepare('SELECT payload FROM trade_attempts ORDER BY at DESC,id').all().map(row=>this.decrypt<TradeAttempt>(row.payload)));}
+  saveTradeAttempt(value:TradeAttempt):void{
+    const attempt=validateTradeAttempts([value])[0],payload=this.encrypt(attempt);
+    this.transaction(()=>this.db.prepare('INSERT INTO trade_attempts VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET state=excluded.state,payload=excluded.payload').run(attempt.id,attempt.status,attempt.startedAt,payload));
   }
   private encodeAddresses(addresses: LocalAddress[]) { return addresses.map(address => ({ address, payload: this.encrypt(address) })); }
   private writeAddresses(data: ReturnType<SqliteRepository['encodeAddresses']>): void {
@@ -349,6 +356,13 @@ export class SqliteRepository implements HubRepository, AddressRepository, Sessi
   restore(data: PortableData | null, addresses: LocalAddress[] | null, management:ManagementData|null=null): void {
     const hub = data ? this.encodeHub(data) : null;
     const book = addresses ? this.encodeAddresses(addresses) : null;
+    const incomingTrades=data&&management?validateTradeAttempts(management.tradeAttempts??[]):[];
+    const currentTrades=new Map((incomingTrades.length?this.tradeAttempts():[]).map(row=>[row.id,row]));
+    const restoredAt=new Date().toISOString();
+    const mergedTrades=incomingTrades.map(saved=>{
+      const item=mergeRestoredTradeAttempt(currentTrades.get(saved.id),saved,restoredAt);
+      return{item,payload:this.encrypt(item)};
+    });
     this.backup('before-restore');
     this.transaction(() => {
       if (hub) this.writeHub(hub, true);
@@ -358,6 +372,8 @@ export class SqliteRepository implements HubRepository, AddressRepository, Sessi
         for(const item of management.priceHistory)history.run(item.id,item.cardId,item.sourceId,item.at,this.encrypt(item));
         const tasks=this.db.prepare('INSERT INTO sync_tasks VALUES (?, ?, ?, ?)');
         for(const task of management.syncTasks){const item=['queued','running'].includes(task.status)?{...task,status:'interrupted',finishedAt:new Date().toISOString(),message:'恢复的未完成任务，可重新同步'}:task;tasks.run(item.id,item.cardId,item.startedAt,this.encrypt(item));}
+        const insertTrade=this.db.prepare('INSERT INTO trade_attempts VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET state=excluded.state,payload=excluded.payload');
+        for(const {item,payload}of mergedTrades)insertTrade.run(item.id,item.status,item.startedAt,payload);
       }
       this.assertIntegrity();
     });
