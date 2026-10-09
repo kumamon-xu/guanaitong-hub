@@ -32,14 +32,25 @@ function githubRepository(url: string): string | null {
   const match = parsed.pathname.match(/^\/repos\/([a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+)\/releases\/latest$/);
   return parsed.hostname === 'api.github.com' && !parsed.search && match ? match[1] : null;
 }
+class UpdateResponseInterrupted extends Error {
+  constructor() { super('更新响应读取中断或超时'); }
+}
+async function discardResponse(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => {});
+}
 async function responseBytes(response: Response): Promise<Buffer> {
-  if (Number(response.headers.get('content-length')) > MAX_JSON) { await response.body?.cancel(); throw new Error('发布清单过大'); }
+  if (Number(response.headers.get('content-length')) > MAX_JSON) { await discardResponse(response); throw new Error('发布清单过大'); }
   const reader = response.body?.getReader();
   if (!reader) throw new Error('发布清单为空');
   const chunks: Uint8Array[] = []; let size = 0;
   try {
-    while (true) { const item = await reader.read(); if (item.done) break; size += item.value.length; if (size > MAX_JSON) throw new Error('发布清单过大'); chunks.push(item.value); }
-  } finally { await reader.cancel(); }
+    while (true) {
+      let item: ReadableStreamReadResult<Uint8Array>;
+      try { item = await reader.read(); } catch { throw new UpdateResponseInterrupted(); }
+      if (item.done) break;
+      size += item.value.length; if (size > MAX_JSON) throw new Error('发布清单过大'); chunks.push(item.value);
+    }
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
   return Buffer.concat(chunks);
 }
 async function jsonResponse(response: Response): Promise<any> {
@@ -75,7 +86,7 @@ export class ReleaseService {
       const response = await this.fetcher(target, { credentials: 'omit', redirect: 'manual', signal,
         headers: { Accept: api ? 'application/vnd.github+json' : 'application/octet-stream', 'User-Agent': 'guanaitong-hub/' + this.version, ...(api ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}) } });
       if (![301, 302, 303, 307, 308].includes(response.status)) return response;
-      await response.body?.cancel();
+      await discardResponse(response);
       if (!redirects || count === 5) throw new Error('更新下载重定向无效');
       const location = response.headers.get('location'); if (!location) throw new Error('更新下载重定向无效');
       target = httpsURL(new URL(location, target).toString());
@@ -93,12 +104,12 @@ export class ReleaseService {
         tag = match[2]; base = next.toString().slice(0, -'release.json'.length);
       } else if (!tag) throw new Error('GitHub 未解析正式版本地址');
     });
-    if (!response.ok) { await response.body?.cancel(); throw new Error('GitHub 正式更新清单读取失败（HTTP ' + response.status + '）'); }
-    if (!tag) { await response.body?.cancel(); throw new Error('GitHub 未解析正式版本地址'); }
+    if (!response.ok) { await discardResponse(response); throw new Error('GitHub 正式更新清单读取失败（HTTP ' + response.status + '）'); }
+    if (!tag) { await discardResponse(response); throw new Error('GitHub 未解析正式版本地址'); }
     const manifest = validateManifest(await jsonResponse(response));
     if (manifest.version !== tag.slice(1)) throw new Error('更新清单与 GitHub 标签版本不一致');
     const checksumResponse = await this.request(base + 'SHA256SUMS.txt', true, undefined, true);
-    if (!checksumResponse.ok) { await checksumResponse.body?.cancel(); throw new Error('GitHub 校验清单读取失败（HTTP ' + checksumResponse.status + '）'); }
+    if (!checksumResponse.ok) { await discardResponse(checksumResponse); throw new Error('GitHub 校验清单读取失败（HTTP ' + checksumResponse.status + '）'); }
     const checksums = new Map<string, string>();
     for (const line of (await responseBytes(checksumResponse)).toString('utf8').split(/\r?\n/).filter(line => line.trim())) {
       const match = line.match(/^([a-f0-9]{64}) {2}([^/\\\r\n]+)$/i);
@@ -113,21 +124,23 @@ export class ReleaseService {
     return { manifest, releaseUrl: `https://github.com/${repository}/releases/tag/${tag}` };
   }
   private async githubRelease(target: string, repository: string): Promise<{ manifest: ReleaseManifest | null; releaseUrl: string }> {
-    let response: Response;
-    try { response = await this.request(target, false, undefined, true); }
+    let response: Response, value: any;
+    try {
+      response = await this.request(target, false, undefined, true);
+      if (response.ok) value = await jsonResponse(response);
+    }
     catch (error) {
-      if (!(error instanceof TypeError) && !(error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name))) throw error;
+      if (!(error instanceof UpdateResponseInterrupted) && !(error instanceof TypeError) && !(error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name))) throw error;
       try { return await this.latestGithubManifest(repository); }
-      catch (fallback) { throw new Error('GitHub 更新 API 无法连接，官方发布通道读取失败：' + (fallback instanceof Error ? fallback.message : String(fallback))); }
+      catch (fallback) { throw new Error('GitHub 更新 API 连接或响应读取失败，官方发布通道读取失败：' + (fallback instanceof Error ? fallback.message : String(fallback))); }
     }
     if ([403, 429, 500, 502, 503, 504].includes(response.status)) {
-      await response.body?.cancel();
+      await discardResponse(response);
       try { return await this.latestGithubManifest(repository); }
       catch (error) { throw new Error(`GitHub 更新 API 暂不可用（HTTP ${response.status}），官方发布通道读取失败：` + (error instanceof Error ? error.message : String(error))); }
     }
-    if (response.status === 404) { await response.body?.cancel(); return { manifest: null, releaseUrl: `https://github.com/${repository}/releases` }; }
-    if (!response.ok) { await response.body?.cancel(); throw new Error('更新检查失败（HTTP ' + response.status + '）'); }
-    const value = await jsonResponse(response);
+    if (response.status === 404) { await discardResponse(response); return { manifest: null, releaseUrl: `https://github.com/${repository}/releases` }; }
+    if (!response.ok) { await discardResponse(response); throw new Error('更新检查失败（HTTP ' + response.status + '）'); }
     if (value?.draft !== false || value?.prerelease !== false || typeof value.tag_name !== 'string' || typeof value.published_at !== 'string' || !Array.isArray(value.assets)) throw new Error('GitHub 发布信息无效');
     const version = value.tag_name.replace(/^v/, ''); compareVersions(version, this.version);
     const asset = value.assets.find((item: any) => item.name === 'release.json' && item.state === 'uploaded');
@@ -136,7 +149,7 @@ export class ReleaseService {
     const manifestURL = httpsURL(asset.browser_download_url);
     if (!manifestURL.startsWith(expected)) throw new Error('GitHub 更新清单来源不一致');
     const manifestResponse = await this.request(manifestURL, true, undefined, true);
-    if (!manifestResponse.ok) { await manifestResponse.body?.cancel(); throw new Error('GitHub 更新清单读取失败'); }
+    if (!manifestResponse.ok) { await discardResponse(manifestResponse); throw new Error('GitHub 更新清单读取失败'); }
     const manifest = validateManifest(await jsonResponse(manifestResponse));
     if (manifest.version !== version) throw new Error('更新清单与 GitHub 标签版本不一致');
     for (const download of Object.values(manifest.downloads)) {
@@ -162,7 +175,7 @@ export class ReleaseService {
       manifest = release.manifest;
     } else {
       const response = await this.request(target);
-      if (!response.ok) { await response.body?.cancel(); throw new Error('更新检查失败（HTTP ' + response.status + '）'); }
+      if (!response.ok) { await discardResponse(response); throw new Error('更新检查失败（HTTP ' + response.status + '）'); }
       manifest = validateManifest(await jsonResponse(response));
     }
     const available = compareVersions(manifest.version, this.version) > 0;

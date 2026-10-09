@@ -33,7 +33,10 @@ const originalFetch=globalThis.fetch;
 const updateRequests:string[]=[];
 globalThis.fetch=(async(input,options)=>{
   const url=String(input);
-  if(url===DEFAULT_UPDATE_FEED){updateRequests.push(url);return new Response('Synthetic API rate limit exceeded',{status:403,headers:{'x-ratelimit-remaining':'0'}});}
+  if(url===DEFAULT_UPDATE_FEED){
+    updateRequests.push(url);let reads=0;
+    return new Response(new ReadableStream<Uint8Array>({pull(controller){if(reads++===0)controller.enqueue(new TextEncoder().encode('{"tag_name":'));else controller.error(new Error('Synthetic API body interruption'));}}));
+  }
   if(url===`https://github.com/${RELEASE_REPOSITORY}/releases/latest/download/release.json`){updateRequests.push(url);return new Response('',{status:302,headers:{Location:updateBase+'release.json'}});}
   if(url===updateBase+'release.json'){updateRequests.push(url);return Response.json(updateManifest);}
   if(url===updateBase+'SHA256SUMS.txt'){updateRequests.push(url);return new Response(updateHash+'  '+updateName+'\n');}

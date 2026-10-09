@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync,readdirSync,readFileSync,rmSync,writeFileSync } from 'node:fs';
 import { join,resolve,sep } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:http';
 import { afterEach,test } from 'node:test';
 import { ReleaseService } from '../electron/release-service';
 import { DATABASE_VERSION } from '../electron/database-migrations';
@@ -66,6 +67,60 @@ test('GitHub API connection and timeout errors can use the published asset chann
   for(const error of [new TypeError('fetch failed'),new DOMException('timeout','TimeoutError')]){
     const f=fixture(fallbackFetcher(()=>{throw error;}));assert.equal((await f.service.check()).available,true);assert.deepEqual(f.events,[]);
   }
+});
+
+test('GitHub API body disconnects and timeouts after HTTP 200 use the stable asset fallback',async()=>{
+  for(const error of [new TypeError('terminated'),new Error('connection reset'),new DOMException('body timeout','TimeoutError'),new DOMException('body aborted','AbortError')]){
+    let reads=0;
+    const response=new Response(new ReadableStream<Uint8Array>({pull(controller){if(reads++===0)controller.enqueue(new TextEncoder().encode('{"tag_name":"v0.6.2",'));else controller.error(error);}}));
+    const requests:string[]=[];const f=fixture(fallbackFetcher(()=>response,{},requests));
+    const info=await f.service.check();assert.equal(info.available,true);assert.equal(info.version,'0.6.2');
+    assert.deepEqual(requests,[DEFAULT_UPDATE_FEED,latestManifestURL,manifestURL,'https://release-assets.githubusercontent.com/synthetic-manifest',checksumURL]);
+    assert.equal(response.body!.locked,false);assert.deepEqual(f.events,[]);
+  }
+});
+
+test('an actual HTTP 200 response that stalls mid-body falls back after a timeout abort',async()=>{
+  const server=createServer((_request,response)=>{response.writeHead(200,{'Content-Type':'application/json'});response.write('{"tag_name":"v0.6.2",');});
+  await new Promise<void>((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+  let timeout:ReturnType<typeof setTimeout>|undefined;
+  try {
+    const address=server.address();assert.ok(address&&typeof address!=='string');
+    const requests:string[]=[];let receivedHeaders=false;
+    const fallback=fallbackFetcher(()=>{throw new Error('API must use the local streaming response');},{},requests);
+    const f=fixture(fetcher(async(url,init)=>{
+      if(url!==DEFAULT_UPDATE_FEED)return fallback(url,init);
+      requests.push(url);const controller=new AbortController();
+      const response=await fetch(`http://127.0.0.1:${address.port}/release`,{...init,signal:AbortSignal.any([init!.signal!,controller.signal])});
+      assert.equal(response.status,200);receivedHeaders=true;
+      timeout=setTimeout(()=>controller.abort(new DOMException('synthetic body timeout','TimeoutError')),20);
+      return response;
+    }));
+    assert.equal((await f.service.check()).available,true);assert.equal(receivedHeaders,true);assert.equal(requests.filter(url=>url===latestManifestURL).length,1);assert.deepEqual(f.events,[]);
+  } finally {
+    clearTimeout(timeout);server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));
+  }
+});
+
+test('invalid API JSON and oversized bodies stay rejected even when stream cleanup fails',async()=>{
+  const oversized=()=>new ReadableStream<Uint8Array>({start(controller){controller.enqueue(new Uint8Array(300000));},cancel(){throw new TypeError('synthetic cleanup failure');}});
+  const cases:[()=>Response,RegExp][]=[
+    [()=>new Response('{invalid JSON'),/格式无效/],
+    [()=>new Response(oversized()),/过大/],
+    [()=>new Response(oversized(),{headers:{'content-length':'300000'}}),/过大/],
+    [()=>Response.json(release({tag_name:'v0.6.2-beta'})),/x.y.z/],
+  ];
+  for(const [api,message] of cases){
+    const requests:string[]=[];const f=fixture(fallbackFetcher(api,{},requests));
+    await assert.rejects(f.service.check(),message);assert.deepEqual(requests,[DEFAULT_UPDATE_FEED]);assert.deepEqual(f.events,[]);await assert.rejects(f.service.prepare(),/先检查/);
+  }
+});
+
+test('API body interruption with an invalid fallback fails once without preparing an update',async()=>{
+  const requests:string[]=[];
+  const f=fixture(fallbackFetcher(()=>new Response(new ReadableStream({start(controller){controller.error(new TypeError('terminated'));}})),{checksums:'invalid'},requests));
+  await assert.rejects(f.service.check(),/官方发布通道读取失败/);assert.equal(requests.filter(url=>url===DEFAULT_UPDATE_FEED).length,1);assert.equal(requests.filter(url=>url===latestManifestURL).length,1);
+  await assert.rejects(f.service.prepare(),/先检查/);assert.deepEqual(f.events,[]);assert.deepEqual(readdirSync(f.directory),[]);
 });
 
 test('fallback pins the repository, stable tag, release manifest version and package locations',async()=>{
