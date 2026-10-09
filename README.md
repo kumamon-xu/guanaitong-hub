@@ -14,7 +14,7 @@
 
 这是一个基于 **Electron + React + TypeScript** 的非官方本地桌面工具，面向 Windows 与 macOS。账户凭据与数据保存在自己的电脑中，登录会话按卡片独立管理，兑换由用户明确确认。
 
-**v0.7.0** 新增应用内结算与明确确认后的扣卡兑换。当前正在准备发布构建，下方安装包暂为 v0.6.2；流程与测试范围见[应用内扣卡兑换](docs/native-checkout.md)。
+**v0.7.0 已正式发布**，新增应用内结算与明确确认后的扣卡兑换，修复待核对记录展示和备份恢复时的订单号合并。流程与测试范围见[应用内扣卡兑换](docs/native-checkout.md)。
 
 > [!NOTE]
 > 公开仓库仅包含源码、合成测试与通用文档。真实卡号、卡密、Cookie、地址、订单记录、数据库、加密备份及现场诊断文件均不上传。
@@ -38,9 +38,9 @@
 
 ## 快速开始
 
-下载安装包：[Windows x64](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.6.2/guanaitong-hub-0.6.2-x64-setup.exe) · [macOS Apple Silicon](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.6.2/guanaitong-hub-0.6.2-arm64.zip) · [macOS Intel](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.6.2/guanaitong-hub-0.6.2-x64.zip)。[正式发布页](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.6.2)包含版本说明与 SHA-256 校验文件。macOS 解压后将应用移入应用目录。
+下载安装包：[Windows x64](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.7.0/guanaitong-hub-0.7.0-x64-setup.exe) · [macOS Apple Silicon](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.7.0/guanaitong-hub-0.7.0-arm64.zip) · [macOS Intel](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.7.0/guanaitong-hub-0.7.0-x64.zip)。[正式发布页](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.7.0)包含版本说明与 SHA-256 校验文件。macOS 解压后将应用移入应用目录。
 
-v0.6.2 安装包尚未配置发布者签名，macOS 未公证；系统可能显示安全提示。
+v0.7.0 安装包尚未配置发布者签名，macOS 未公证；系统可能显示安全提示。
 
 ### 从源码运行
 
@@ -89,7 +89,7 @@ npm run package:mac      # macOS 程序目录，在 Mac 上运行
 - 数据使用本地 SQLite，无需单独维护数据库服务。卡号、密码、地址、Cookie 及自由文本载荷在入库前使用 Electron `safeStorage` 加密。
 - 每张卡使用独立内存浏览器会话；官网网页没有 Node 权限或本地数据访问权限。
 - 完整同步快照通过事务提交。失败或中断保留上次完整数据，只有已确认的零余额才可自动归档。
-- 新版 `.gathub` 使用独立口令、scrypt 和 AES-256-GCM，包含本地卡片数据、地址、报价历史及同步记录。恢复前预览并自动备份当前数据库，兼容旧 `.gathub` 和 `.gataddr`。
+- 新版 `.gathub` 使用独立口令、scrypt 和 AES-256-GCM，包含本地卡片数据、地址、报价历史、同步与兑换记录。恢复前预览并自动备份当前数据库，兼容旧 `.gathub` 和 `.gataddr`。
 - 系统加密绑定原设备和系统用户。跨电脑迁移使用口令备份，Cookie 不随备份迁移，需要重新官网登录。
 - 应用直接连接官网；没有开发者数据上传接口。公开问题报告和截图也应先脱敏。
 
@@ -106,7 +106,7 @@ git add <reviewed-files>
 npm run audit:public         # 审查 Git 暂存区是否适合公开
 ```
 
-常规测试不会访问个人应用数据或登录真实账号。开发版 160 项本地测试、Windows 原生结算与更新验证、旧版写入→新版读取回归已通过；新增代码尚未进行在线发布构建。范围与真实预览入口见[验证说明](docs/verification.md)和[应用内扣卡兑换](docs/native-checkout.md)。自动检查与手动签名构建配置位于 `.github/workflows/`。
+常规测试不会访问个人应用数据或登录真实账号。160 项合成测试、Windows/macOS 桌面 CI、三平台发布构建、旧版写入→新版读取回归与公开更新通道检查已通过。授权真实卡测试仅到结算预览，最终兑换请求为零；完整提交使用模拟接口验证。范围与真实预览入口见[验证说明](docs/verification.md)和[应用内扣卡兑换](docs/native-checkout.md)。自动检查与手动签名构建配置位于 `.github/workflows/`。
 
 ```text
 src/          React 页面、共享类型、筛选与预算规则
