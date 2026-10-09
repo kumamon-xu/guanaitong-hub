@@ -3,7 +3,7 @@
   <h1>关爱通卡管家</h1>
   <p>把福利卡、商品、兑换清单与历史订单，放在同一个本地空间。</p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.7.0-52754b" alt="版本 0.7.0" />
+    <img src="https://img.shields.io/badge/version-0.7.1-52754b" alt="版本 0.7.1" />
     <img src="https://img.shields.io/badge/Node.js-%E2%89%A524-43853d" alt="Node.js 24 或更新版本" />
     <img src="https://img.shields.io/badge/Electron-44-47848f" alt="Electron 44" />
     <img src="https://img.shields.io/badge/storage-SQLite-003b57" alt="SQLite 本地存储" />
@@ -14,9 +14,7 @@
 
 这是一个基于 **Electron + React + TypeScript** 的非官方本地桌面工具，面向 Windows 与 macOS。账户凭据与数据保存在自己的电脑中，登录会话按卡片独立管理，兑换由用户明确确认。
 
-**v0.7.0 已正式发布**，新增应用内结算与明确确认后的扣卡兑换，修复待核对记录展示和备份恢复时的订单号合并。流程与测试范围见[应用内扣卡兑换](docs/native-checkout.md)。
-
-正在准备 v0.7.1 修补版，解决 GitHub API 限流引起的在线更新 HTTP 403。安装包以正式发布页为准。
+**v0.7.1 已正式发布**，修复 GitHub API 限流引起的在线更新 HTTP 403，自动回退到官方稳定版发布资产通道。保留 v0.7.0 的应用内结算、明确确认后的扣卡兑换及待核对记录保护，流程与测试范围见[应用内扣卡兑换](docs/native-checkout.md)。
 
 > [!NOTE]
 > 公开仓库仅包含源码、合成测试与通用文档。真实卡号、卡密、Cookie、地址、订单记录、数据库、加密备份及现场诊断文件均不上传。
@@ -40,9 +38,9 @@
 
 ## 快速开始
 
-下载安装包：[Windows x64](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.7.0/guanaitong-hub-0.7.0-x64-setup.exe) · [macOS Apple Silicon](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.7.0/guanaitong-hub-0.7.0-arm64.zip) · [macOS Intel](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.7.0/guanaitong-hub-0.7.0-x64.zip)。[正式发布页](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.7.0)包含版本说明与 SHA-256 校验文件。macOS 解压后将应用移入应用目录。
+下载安装包：[Windows x64](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.7.1/guanaitong-hub-0.7.1-x64-setup.exe) · [macOS Apple Silicon](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.7.1/guanaitong-hub-0.7.1-arm64.zip) · [macOS Intel](https://github.com/kumamon-xu/guanaitong-hub/releases/download/v0.7.1/guanaitong-hub-0.7.1-x64.zip)。[正式发布页](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.7.1)包含版本说明与 SHA-256 校验文件。macOS 解压后将应用移入应用目录。
 
-v0.7.0 安装包尚未配置发布者签名，macOS 未公证；系统可能显示安全提示。
+v0.7.1 安装包尚未配置发布者签名，macOS 未公证；系统可能显示安全提示。
 
 ### 从源码运行
 
@@ -110,7 +108,7 @@ git add <reviewed-files>
 npm run audit:public         # 审查 Git 暂存区是否适合公开
 ```
 
-常规测试不会访问个人应用数据或登录真实账号。160 项合成测试、Windows/macOS 桌面 CI、三平台发布构建、旧版写入→新版读取回归与公开更新通道检查已通过。授权真实卡测试仅到结算预览，最终兑换请求为零；完整提交使用模拟接口验证。范围与真实预览入口见[验证说明](docs/verification.md)和[应用内扣卡兑换](docs/native-checkout.md)。自动检查与手动签名构建配置位于 `.github/workflows/`。
+常规测试不会访问个人应用数据或登录真实账号。166 项合成测试、Windows/macOS 桌面 CI 与三平台发布构建已通过；公开更新通道通过 18 项版本/平台检查，包含强制 API 403 回退。v0.7.0 已通过旧版写入→新版读取回归；授权真实卡测试仅到结算预览，最终兑换请求为零，完整提交使用模拟接口验证。范围与真实预览入口见[验证说明](docs/verification.md)和[应用内扣卡兑换](docs/native-checkout.md)。自动检查与手动签名构建配置位于 `.github/workflows/`。
 
 ```text
 src/          React 页面、共享类型、筛选与预算规则

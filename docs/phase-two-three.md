@@ -75,6 +75,8 @@ v0.6.2 已通过[三平台构建与清单组装](https://github.com/kumamon-xu/g
 
 v0.7.0 已通过[三平台构建与清单组装](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37902415619)，并于 2026-10-09 [正式发布](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.7.0)。包含应用内结算、明确确认后的扣卡提交与兑换记录保护修复，数据库及统一备份为 v4。公开更新通道、资产大小及校验值已复核；真实卡只验证到预览，最终提交使用模拟接口验证。安装包未签名，macOS 未公证。
 
+v0.7.1 已通过[三平台构建与清单组装](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37904824254)，并于 2026-10-09 [正式发布](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.7.1)。修复 API 限流时更新检查失败，实际公开资产检查包含强制 403 回退；数据库与备份保持 v4，签名状态与 v0.7.0 相同。旧程序受限时需手动安装一次。
+
 ci.yml 继续执行 Windows/macOS 的代码、模拟登录、原生加密与目录打包检查。工作流中的 build 任务仅有读取权限，草稿组装任务单独使用 contents:write。
 
 ## 公开仓库规则

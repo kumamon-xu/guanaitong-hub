@@ -10,6 +10,10 @@
 
 Windows 原生桌面回归在模拟 API 403 的情况下，通过 renderer→preload→主进程的实际 IPC 完成回退检查、合成安装包下载校验及数据库安全副本创建；安装交接被测试桩阻止，没有执行安装程序。
 
+Windows/macOS 的 [Desktop checks](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37904823625)及[三平台发布构建与清单组装](https://github.com/kumamon-xu/guanaitong-hub/actions/runs/37904824254)通过，构建源提交为 `7fb2c24413b7e79899837964db52e4885df65cef`。安装包实际大小和 SHA-256 与 GitHub 资产 digest 复核一致。
+
+[v0.7.1](https://github.com/kumamon-xu/guanaitong-hub/releases/tag/v0.7.1) 已于 2026-10-09 正式发布并设为最新稳定版本。认证发布 API 确认 latest 标签，公开下载地址、清单及校验值复核通过。实际更新服务以 v0.6.2、v0.7.0 和 v0.7.1 为版本参数，在三个平台分别执行正常请求和强制 API 403 共 18 项检查；两个旧版本参数均识别为可更新，v0.7.1 识别为当前版本，受限时经公开发布资产回退成功。此检查不执行安装或修改应用数据。旧程序未包含回退逻辑，仍遇到 403 时需手动安装修补版一次。安装包未签名，macOS 未公证。
+
 SQLite 与统一备份保持 v4。本次修复不调用真实卡片接口，不执行真实下单。
 
 ## v0.7.0 验证
